@@ -13,22 +13,35 @@
 
 ## Install the Skill
 
-This is the only thing you need. One command and your agent can upload HTML, create accounts, and manage everything automatically.
+One command per wrapper. Pick yours.
+
+### OpenCode
 
 ```bash
-# Copy the skill to your opencode skills directory
-curl -fsSL https://raw.githubusercontent.com/sebas-developer/htmlhost/main/skills/paste-service.md \
+mkdir -p ~/.config/opencode/skills && \
+curl -fsSL https://raw.githubusercontent.com/sebas-developer/htmlhost/main/skills/opencode/SKILL.md \
   -o ~/.config/opencode/skills/paste-service.md
 ```
 
-That's it. Your agent now knows how to:
+### Claude Code
 
-1. Install the CLI globally
-2. Create an account
-3. Upload HTML files
-4. Get disposable URLs
+```bash
+mkdir -p ~/.claude/skills && \
+curl -fsSL https://raw.githubusercontent.com/sebas-developer/htmlhost/main/skills/claude-code/SKILL.md \
+  -o ~/.claude/skills/paste-service.md
+```
 
-**Try it:** Ask your agent to "host an HTML page" or "upload this file" — it will handle everything end-to-end.
+### Codex
+
+```bash
+mkdir -p ~/.agents/skills && \
+curl -fsSL https://raw.githubusercontent.com/sebas-developer/htmlhost/main/skills/codex/SKILL.md \
+  -o ~/.agents/skills/paste-service.md
+```
+
+**That's it.** Your agent now knows how to install the CLI, create accounts, and upload HTML.
+
+Ask it to "host an HTML page" or "upload this file" — it handles everything end-to-end.
 
 ---
 
@@ -38,7 +51,7 @@ That's it. Your agent now knows how to:
 
 - Dashboard: visit the URL and log in with your mnemonic
 - API: `https://html-host.fly.dev/api/pastes`
-- First paste: https://html-host.fly.dev/p/WOyBK6
+- Example paste: https://html-host.fly.dev/p/WOyBK6
 
 ---
 
@@ -47,16 +60,30 @@ That's it. Your agent now knows how to:
 If you prefer not to use the skill:
 
 ```bash
-# Install CLI globally
 npm install -g https://github.com/sebas-developer/htmlhost
-
-# Create account (generates mnemonic + API key)
 htmlhost setup
-
-# Upload a file
 htmlhost upload index.html
+```
 
-# Done — your URL is printed
+---
+
+## How It Works
+
+The skill teaches your agent to:
+
+1. Check if `~/.htmlhost/config.json` exists
+2. If not → install CLI globally + run `htmlhost setup`
+3. Setup generates a 12-word mnemonic + API key, saves to config
+4. Agent uses config for all uploads — no env vars needed
+5. Reports the URL back to you
+
+Credentials live in `~/.htmlhost/config.json`:
+```json
+{
+  "mnemonic": "word1 word2 ... word12",
+  "apiKey": "ps_...",
+  "url": "https://html-host.fly.dev"
+}
 ```
 
 ---
@@ -64,7 +91,8 @@ htmlhost upload index.html
 ## CLI Reference
 
 ```bash
-htmlhost setup                    # Create account (run first)
+htmlhost setup                    # Create account + save credentials
+htmlhost show-credentials         # Show saved mnemonic + API key
 htmlhost upload <file> [--ttl]    # Upload HTML
 htmlhost list                     # List pastes
 htmlhost delete <id>              # Delete paste
