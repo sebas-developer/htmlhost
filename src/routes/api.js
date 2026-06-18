@@ -1,8 +1,17 @@
 const express = require('express');
 const router = express.Router();
+const rateLimit = require('express-rate-limit');
 const { requireApiKey } = require('../auth');
 const pastes = require('../services/pastes');
 const keys = require('../services/keys');
+
+const registerLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 3,
+  message: { error: 'Too many attempts' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // --- Pastes ---
 
@@ -22,7 +31,7 @@ router.post('/pastes', requireApiKey, (req, res) => {
       ttl: result.ttl,
     });
   } catch (err) {
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: 'Bad request' });
   }
 });
 
@@ -58,8 +67,14 @@ router.delete('/pastes/:id', requireApiKey, (req, res) => {
 
 // --- Keys ---
 
-// Bootstrap: register first key without auth
-router.post('/auth/register', (req, res) => {
+// Bootstrap: register first key without auth (only when DB is empty)
+router.post('/auth/register', registerLimiter, (req, res) => {
+  const db = require('../db').getDb();
+  const keyCount = db.prepare('SELECT COUNT(*) as count FROM keys').get().count;
+  if (keyCount > 0) {
+    return res.status(403).json({ error: 'Registration closed' });
+  }
+
   const { hash, label, id } = req.body || {};
   if (!hash || !id) {
     return res.status(400).json({ error: 'hash and id required' });
@@ -68,7 +83,6 @@ router.post('/auth/register', (req, res) => {
   if (existing) {
     return res.status(409).json({ error: 'Key already registered' });
   }
-  const db = require('../db').getDb();
   db.prepare('INSERT INTO keys (id, hash, label, created_at) VALUES (?, ?, ?, ?)')
     .run(id, hash, label || null, Date.now());
   res.status(201).json({ success: true });
@@ -76,6 +90,9 @@ router.post('/auth/register', (req, res) => {
 
 router.post('/keys', requireApiKey, (req, res) => {
   const { label } = req.body || {};
+  if (label && label.length > 64) {
+    return res.status(400).json({ error: 'Label too long (max 64 chars)' });
+  }
   const result = keys.createKey(label);
   res.status(201).json({
     id: result.id,
@@ -95,6 +112,9 @@ router.get('/keys', requireApiKey, (req, res) => {
 });
 
 router.delete('/keys/:id', requireApiKey, (req, res) => {
+  if (req.params.id !== req.keyId) {
+    return res.status(403).json({ error: 'Cannot delete other users\' keys' });
+  }
   const result = keys.deleteKey(req.params.id);
   if (!result) return res.status(404).json({ error: 'Key not found' });
   res.json({ deleted: true, deletedPastes: result.deletedPastes });

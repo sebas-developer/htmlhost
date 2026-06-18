@@ -30,15 +30,24 @@ function listKeys() {
   return db.prepare('SELECT id, label, created_at FROM keys ORDER BY created_at DESC').all();
 }
 
+function listKeysForOwner(ownerKeyId) {
+  const db = getDb();
+  return db.prepare('SELECT id, label, created_at FROM keys WHERE id = ? ORDER BY created_at DESC').all(ownerKeyId);
+}
+
 function deleteKey(id) {
   const db = getDb();
   const key = db.prepare('SELECT id FROM keys WHERE id = ?').get(id);
   if (!key) return null;
 
-  const pasteCount = db.prepare('SELECT COUNT(*) as count FROM pastes WHERE owner_key = ?').get(id).count;
-  db.prepare('DELETE FROM pastes WHERE owner_key = ?').run(id);
-  db.prepare('DELETE FROM keys WHERE id = ?').run(id);
-  return { id, deletedPastes: pasteCount };
+  const deleteTransaction = db.transaction(() => {
+    const pasteCount = db.prepare('SELECT COUNT(*) as count FROM pastes WHERE owner_key = ?').get(id).count;
+    db.prepare('DELETE FROM pastes WHERE owner_key = ?').run(id);
+    db.prepare('DELETE FROM keys WHERE id = ?').run(id);
+    return { id, deletedPastes: pasteCount };
+  });
+
+  return deleteTransaction();
 }
 
 function verifyApiKey(apiKey) {
@@ -46,4 +55,4 @@ function verifyApiKey(apiKey) {
   return findByHash(hash);
 }
 
-module.exports = { createKey, findByHash, findById, listKeys, deleteKey, verifyApiKey };
+module.exports = { createKey, findByHash, findById, listKeys, listKeysForOwner, deleteKey, verifyApiKey };

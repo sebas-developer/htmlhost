@@ -198,7 +198,7 @@
         <% pastes.forEach(function(p) { %>
           <div class="card" id="paste-<%= p.id %>">
             <div class="card-preview">
-              <iframe src="/p/<%= p.id %>" sandbox="allow-scripts" loading="lazy"></iframe>
+              <iframe src="/p/<%= p.id %>" sandbox="allow-same-origin" loading="lazy"></iframe>
             </div>
             <div class="card-info">
               <div class="card-id">/p/<%= p.id %></div>

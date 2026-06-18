@@ -1,16 +1,25 @@
 const express = require('express');
 const router = express.Router();
+const rateLimit = require('express-rate-limit');
 const keys = require('../services/keys');
 const pastes = require('../services/pastes');
 const { requireSession } = require('../auth');
 const { getBrowserDerivationParams } = require('../util/mnemonic');
+
+const loginLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 5,
+  message: { error: 'Too many login attempts. Try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 router.get('/login', (req, res) => {
   const cryptoParams = getBrowserDerivationParams();
   res.render('login', { error: null, cryptoParams });
 });
 
-router.post('/login', express.json(), (req, res) => {
+router.post('/login', loginLimiter, express.json(), (req, res) => {
   const { mnemonic } = req.body;
   if (!mnemonic || typeof mnemonic !== 'string') {
     return res.status(400).json({ error: 'Mnemonic required' });
@@ -29,8 +38,18 @@ router.post('/login', express.json(), (req, res) => {
     return res.status(401).json({ error: 'Invalid mnemonic' });
   }
 
-  req.session.keyId = key.id;
-  res.json({ success: true });
+  req.session.regenerate((err) => {
+    if (err) {
+      return res.status(500).json({ error: 'Session error' });
+    }
+    req.session.keyId = key.id;
+    req.session.save((err) => {
+      if (err) {
+        return res.status(500).json({ error: 'Session error' });
+      }
+      res.json({ success: true });
+    });
+  });
 });
 
 router.post('/logout', (req, res) => {
@@ -40,7 +59,7 @@ router.post('/logout', (req, res) => {
 
 router.get('/', requireSession, (req, res) => {
   const allPastes = pastes.listPastes(req.keyId);
-  const allKeys = keys.listKeys();
+  const allKeys = keys.listKeysForOwner(req.keyId);
   const cryptoParams = getBrowserDerivationParams();
   res.render('dashboard', {
     pastes: allPastes,

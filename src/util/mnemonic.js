@@ -1,10 +1,9 @@
 const crypto = require('crypto');
 
 // BIP39 English wordlist (2048 words)
-// Truncated to first 2048 for standard BIP39 compatibility
 const WORDLIST = require('./wordlist');
 
-const PBKDF2_ITERATIONS = 100_000;
+const PBKDF2_ITERATIONS = 600_000;
 const KEY_LENGTH = 32;
 const SALT_PREFIX = 'htmlhost-v1:';
 
@@ -75,10 +74,10 @@ function decodeMnemonic(phrase) {
   return entropy;
 }
 
-function deriveKey(mnemonic) {
+function deriveKey(mnemonic, salt) {
   const normalized = mnemonic.toLowerCase().trim().split(/\s+/).join(' ');
-  const salt = Buffer.from(SALT_PREFIX + normalized, 'utf8');
-  return crypto.pbkdf2Sync(normalized, salt, PBKDF2_ITERATIONS, KEY_LENGTH, 'sha256');
+  const keySalt = salt || Buffer.from(SALT_PREFIX + normalized, 'utf8');
+  return crypto.pbkdf2Sync(normalized, keySalt, PBKDF2_ITERATIONS, KEY_LENGTH, 'sha256');
 }
 
 function deriveApiKey(mnemonic) {
@@ -93,7 +92,10 @@ function hashKey(apiKey) {
 function verifyMnemonic(mnemonic, storedHash) {
   try {
     const apiKey = deriveApiKey(mnemonic);
-    return hashKey(apiKey) === storedHash;
+    return crypto.timingSafeEqual(
+      Buffer.from(hashKey(apiKey), 'hex'),
+      Buffer.from(storedHash, 'hex')
+    );
   } catch {
     return false;
   }

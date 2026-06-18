@@ -83,7 +83,7 @@
     </div>
   </div>
   <script>
-    const cryptoParams = <%- JSON.stringify(cryptoParams) %>;
+    const cryptoParams = <%- JSON.stringify(cryptoParams).replace(/</g, '\\u003c') %>;
 
     document.getElementById('loginForm').addEventListener('submit', async (e) => {
       e.preventDefault();

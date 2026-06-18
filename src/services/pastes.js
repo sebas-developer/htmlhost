@@ -17,7 +17,7 @@ function createPaste({ html, ttl, ownerKeyId }) {
     const exists = db.prepare('SELECT 1 FROM pastes WHERE id = ?').get(id);
     if (!exists) break;
     attempts++;
-  } while (attempts < 10);
+  } while (attempts < 50);
 
   const expires = expiresAt(ttl);
   const now = Date.now();
@@ -33,8 +33,8 @@ function getPaste(id) {
   const paste = db.prepare('SELECT * FROM pastes WHERE id = ?').get(id);
   if (!paste) return null;
 
+  // Don't delete expired pastes here — let cleanup handle it
   if (paste.expires_at && paste.expires_at < Date.now()) {
-    db.prepare('DELETE FROM pastes WHERE id = ?').run(id);
     return null;
   }
 

@@ -15,6 +15,8 @@ router.get('/p/:id', (req, res) => {
 
   res.setHeader('Content-Type', 'text/html');
   res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Content-Security-Policy', "sandbox allow-forms; default-src 'none'; style-src 'unsafe-inline'; script-src 'none'");
   res.send(paste.html);
 });
 

@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const keys = require('./services/keys');
 
 function requireApiKey(req, res, next) {
@@ -29,11 +30,4 @@ function requireSession(req, res, next) {
   res.redirect('/login');
 }
 
-function requirePasteOwner(req, res, next) {
-  if (!req.keyId) {
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-  next();
-}
-
-module.exports = { requireApiKey, requireSession, requirePasteOwner };
+module.exports = { requireApiKey, requireSession };
