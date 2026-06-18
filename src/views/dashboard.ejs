@@ -1,356 +1,383 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>htmlhost — Dashboard</title>
+  <%- include('partials/head', { title: 'htmlhost — Dashboard' }) %>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: 'SF Mono', 'Fira Code', monospace;
-      background: #0a0a0a;
-      color: #e0e0e0;
-      padding: 2rem;
+    .container { max-width: 1100px; margin: 0 auto; padding: 0 var(--space-5); }
+
+    .topbar {
+      position: sticky; top: 0; z-index: 50;
+      display: flex; align-items: center; gap: var(--space-3);
+      height: 56px; padding: 0 var(--space-5);
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
     }
-    .header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 2rem;
-      padding-bottom: 1rem;
-      border-bottom: 1px solid #222;
+    .topbar .container { display: flex; align-items: center; gap: var(--space-3); padding: 0; }
+    .brand { display: flex; align-items: center; gap: var(--space-2); margin-right: auto; }
+    .brand-mark { width: 14px; height: 14px; background: var(--text); }
+    .brand-name { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
+    .actions { display: flex; align-items: center; gap: var(--space-2); }
+
+    main { padding-bottom: var(--space-8); }
+
+    .pastes-grid {
+      display: grid; gap: var(--space-3);
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
     }
-    h1 { font-size: 1.5rem; color: #fff; }
-    .header-actions { display: flex; gap: 1rem; align-items: center; }
-    .btn {
-      padding: 0.5rem 1rem;
-      background: #fff;
-      color: #000;
-      border: none;
-      border-radius: 4px;
-      font-family: inherit;
-      font-size: 0.85rem;
-      cursor: pointer;
-      font-weight: 600;
+    .paste {
+      display: flex; flex-direction: column;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      transition: border-color var(--t), background var(--t);
     }
-    .btn:hover { background: #ddd; }
-    .btn-danger { background: #f44; color: #fff; }
-    .btn-danger:hover { background: #d33; }
-    .btn-sm { padding: 0.3rem 0.6rem; font-size: 0.75rem; }
-    .section { margin-bottom: 2rem; }
-    .section-title {
-      font-size: 1rem;
-      color: #888;
-      margin-bottom: 1rem;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
+    .paste:hover { border-color: var(--border-strong); }
+    .paste-preview {
+      aspect-ratio: 16 / 10;
+      background: var(--bg-elevated);
+      border-bottom: 1px solid var(--border);
+      position: relative; overflow: hidden;
     }
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-      gap: 1rem;
-    }
-    .card {
-      background: #111;
-      border: 1px solid #222;
-      border-radius: 6px;
-      overflow: hidden;
-    }
-    .card-preview {
-      height: 140px;
-      background: #0d0d0d;
-      border-bottom: 1px solid #222;
-      position: relative;
-    }
-    .card-preview iframe {
-      width: 200%;
-      height: 200%;
+    .paste-preview iframe {
+      position: absolute; top: 0; left: 0;
+      width: 200%; height: 200%;
       transform: scale(0.5);
       transform-origin: top left;
-      border: none;
-      pointer-events: none;
+      border: none; pointer-events: none;
+      background: #fff;
     }
-    .card-info {
-      padding: 0.75rem;
+    .paste-body { padding: var(--space-3) var(--space-4); display: flex; flex-direction: column; gap: var(--space-3); }
+    .paste-id {
+      font-family: var(--font-mono);
+      font-size: 12px; font-weight: 500;
+      color: var(--text);
+      word-break: break-all;
     }
-    .card-id {
-      font-size: 0.85rem;
-      color: #fff;
-      font-weight: 600;
-      margin-bottom: 0.25rem;
+    .paste-meta { display: flex; align-items: center; gap: var(--space-2); font-size: 12px; color: var(--text-muted); }
+    .pill {
+      display: inline-flex; align-items: center; gap: var(--space-1);
+      padding: 2px 6px;
+      font-size: 10px; font-weight: 500;
+      color: var(--text-muted);
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      letter-spacing: 0.02em;
     }
-    .card-meta {
-      font-size: 0.75rem;
-      color: #666;
-      margin-bottom: 0.5rem;
-    }
-    .card-expired { color: #f44; }
-    .card-actions { display: flex; gap: 0.5rem; }
+    .pill-danger { color: var(--danger); border-color: var(--danger); background: var(--danger-soft); }
+    .dot { width: 6px; height: 6px; background: currentColor; }
+    .paste-actions { display: flex; gap: var(--space-2); }
+
     .empty {
-      color: #444;
-      font-size: 0.9rem;
-      padding: 2rem;
+      padding: var(--space-7) var(--space-5);
       text-align: center;
+      border: 1px dashed var(--border);
+      color: var(--text-muted);
+      font-size: 13px;
     }
-    .keys-table {
-      width: 100%;
-      border-collapse: collapse;
+    .empty strong { color: var(--text); font-weight: 600; display: block; margin-bottom: var(--space-1); }
+
+    .keys-list { border: 1px solid var(--border); }
+    .keys-list .row {
+      display: grid; grid-template-columns: 1fr auto auto;
+      align-items: center; gap: var(--space-4);
+      padding: var(--space-3) var(--space-4);
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
     }
-    .keys-table th, .keys-table td {
-      padding: 0.75rem;
-      text-align: left;
-      border-bottom: 1px solid #222;
-      font-size: 0.85rem;
+    .keys-list .row:last-child { border-bottom: none; }
+    .keys-list .row.head {
+      background: var(--bg-elevated);
+      font-size: 11px; font-weight: 600; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: 0.06em;
     }
-    .keys-table th { color: #666; font-weight: normal; text-transform: uppercase; letter-spacing: 0.05em; }
-    .docs {
-      background: #111;
-      border: 1px solid #222;
-      border-radius: 6px;
-      padding: 1.5rem;
-      font-size: 0.85rem;
-      line-height: 1.6;
+    .keys-list .label-cell { font-weight: 500; }
+    .keys-list .label-cell .sub { color: var(--text-muted); font-weight: 400; font-size: 12px; }
+    .keys-list .date { color: var(--text-muted); font-variant-numeric: tabular-nums; font-size: 12px; }
+
+    .docs { display: flex; flex-direction: column; gap: var(--space-6); }
+    .docs h3 {
+      font-size: 14px; font-weight: 600;
+      letter-spacing: -0.01em;
+      margin-bottom: var(--space-2);
     }
-    .docs h3 { color: #fff; margin-bottom: 0.75rem; }
-    .docs code {
-      background: #1a1a1a;
-      padding: 0.15rem 0.4rem;
-      border-radius: 3px;
-      color: #aaa;
-      font-size: 0.8rem;
-    }
+    .docs p { font-size: 13px; color: var(--text-muted); }
+    .docs p code { background: var(--code-bg); padding: 1px 5px; color: var(--text); }
     .docs pre {
-      background: #0d0d0d;
-      border: 1px solid #222;
-      border-radius: 4px;
-      padding: 1rem;
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      padding: var(--space-4);
       overflow-x: auto;
-      margin: 0.75rem 0;
+      font-size: 12px; line-height: 1.6;
+      color: var(--text);
     }
-    .docs pre code { background: none; padding: 0; color: #ccc; }
-    .modal-overlay {
-      display: none;
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0,0,0,0.8);
-      justify-content: center;
-      align-items: center;
-      z-index: 100;
+    .docs pre code { color: inherit; }
+    .docs .endpoint { color: var(--text-muted); }
+    .docs .method { display: inline-block; min-width: 56px; font-weight: 600; color: var(--accent); }
+
+    .upload-form { display: flex; flex-direction: column; gap: var(--space-4); }
+    .upload-form .row { display: grid; grid-template-columns: 120px 1fr; gap: var(--space-3); align-items: start; }
+    .upload-form textarea { min-height: 180px; }
+
+    .cred-warning {
+      display: flex; gap: var(--space-3);
+      padding: var(--space-3);
+      background: var(--danger-soft);
+      border: 1px solid var(--danger);
+      font-size: 12px; color: var(--danger);
+      margin-bottom: var(--space-4);
     }
-    .modal-overlay.active { display: flex; }
-    .modal {
-      background: #111;
-      border: 1px solid #222;
-      border-radius: 8px;
-      padding: 2rem;
-      width: 500px;
-      max-width: 90vw;
+    .cred-warning svg { flex-shrink: 0; width: 16px; height: 16px; }
+
+    @media (max-width: 640px) {
+      .topbar { padding: 0 var(--space-3); }
+      .container { padding: 0 var(--space-3); }
+      .actions .btn span { display: none; }
+      .keys-list .row { grid-template-columns: 1fr auto; }
+      .keys-list .date { display: none; }
     }
-    .modal h2 { margin-bottom: 1rem; font-size: 1.1rem; }
-    .modal textarea, .modal input {
-      width: 100%;
-      background: #0d0d0d;
-      border: 1px solid #333;
-      border-radius: 4px;
-      color: #fff;
-      font-family: inherit;
-      font-size: 0.85rem;
-      padding: 0.5rem;
-      margin-bottom: 0.75rem;
-    }
-    .modal .btn-row { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem; }
-    .modal .btn-secondary { background: #333; color: #fff; }
-    .modal .btn-secondary:hover { background: #444; }
-    .toast {
-      position: fixed;
-      bottom: 2rem;
-      right: 2rem;
-      background: #1a1a1a;
-      border: 1px solid #333;
-      border-radius: 6px;
-      padding: 0.75rem 1rem;
-      font-size: 0.85rem;
-      color: #fff;
-      display: none;
-      z-index: 200;
-    }
-    .toast.show { display: block; }
   </style>
 </head>
 <body>
-  <div class="header">
-    <h1>htmlhost</h1>
-    <div class="header-actions">
-      <button class="btn" onclick="showUploadModal()">+ Upload</button>
-      <button class="btn" onclick="showKeyModal()">+ New Key</button>
-      <form action="/logout" method="POST" style="margin:0">
-        <button type="submit" class="btn btn-secondary">Logout</button>
+  <div class="topbar">
+    <div class="container">
+      <a href="/" class="brand">
+        <div class="brand-mark"></div>
+        <div class="brand-name">htmlhost</div>
+      </a>
+      <div class="actions">
+        <button class="btn btn-sm" onclick="showUploadModal()">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 3v10M3 8h10"/></svg>
+          <span>Upload</span>
+        </button>
+        <button class="btn btn-sm" onclick="showKeyModal()">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 3v10M3 8h10"/></svg>
+          <span>New Key</span>
+        </button>
+        <button class="icon-btn" onclick="toggleTheme()" aria-label="Toggle theme" data-theme-icon></button>
+        <form action="/logout" method="POST" style="margin:0">
+          <button type="submit" class="btn btn-sm btn-ghost" title="Sign out">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 3H3v10h3M10 5l3 3-3 3M6 8h7"/></svg>
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <main>
+      <section class="section">
+        <div class="section-head">
+          <div class="section-title">Pastes</div>
+          <div class="section-count"><%= pastes.length %></div>
+        </div>
+        <% if (pastes.length === 0) { %>
+          <div class="empty">
+            <strong>No pastes yet</strong>
+            Upload your first HTML file to get started.
+          </div>
+        <% } else { %>
+          <div class="pastes-grid">
+            <% pastes.forEach(function(p) { %>
+              <div class="paste" id="paste-<%= p.id %>">
+                <div class="paste-preview">
+                  <iframe src="/p/<%= p.id %>" sandbox="allow-same-origin" loading="lazy" tabindex="-1"></iframe>
+                </div>
+                <div class="paste-body">
+                  <div class="paste-id">/p/<%= p.id %></div>
+                  <div class="paste-meta">
+                    <span class="pill <%= p.expired ? 'pill-danger' : '' %>">
+                      <span class="dot"></span>
+                      <%= p.ttl %><% if (p.expired) { %> &middot; expired<% } %>
+                    </span>
+                  </div>
+                  <div class="paste-actions">
+                    <button class="btn btn-sm" onclick="copyUrl('<%= p.id %>')">Copy URL</button>
+                    <button class="btn btn-sm btn-danger" onclick="deletePaste('<%= p.id %>')">Delete</button>
+                  </div>
+                </div>
+              </div>
+            <% }); %>
+          </div>
+        <% } %>
+      </section>
+
+      <section class="section">
+        <div class="section-head">
+          <div class="section-title">API Keys</div>
+          <div class="section-count"><%= keys.length %></div>
+        </div>
+        <% if (keys.length === 0) { %>
+          <div class="empty">
+            <strong>No API keys</strong>
+            Create one to use with the CLI.
+          </div>
+        <% } else { %>
+          <div class="keys-list">
+            <div class="row head">
+              <div>Label</div>
+              <div>Created</div>
+              <div></div>
+            </div>
+            <% keys.forEach(function(k) { %>
+              <div class="row">
+                <div class="label-cell"><%= k.label || '(unnamed)' %></div>
+                <div class="date"><%= new Date(k.created_at).toLocaleDateString() %></div>
+                <div><button class="btn btn-sm btn-danger" onclick="deleteKey('<%= k.id %>')">Delete</button></div>
+              </div>
+            <% }); %>
+          </div>
+        <% } %>
+      </section>
+
+      <section class="section">
+        <div class="section-head">
+          <div class="section-title">Setup &amp; API</div>
+        </div>
+        <div class="docs">
+          <div>
+            <h3>CLI Installation</h3>
+            <p>Run the CLI directly or install it globally.</p>
+            <pre><code>npm install -g paste-cli
+# or run directly:
+node cli/paste.js</code></pre>
+          </div>
+
+          <div>
+            <h3>Upload HTML</h3>
+            <pre><code>PASTE_API_KEY=ps_... node cli/paste.js upload index.html
+PASTE_API_KEY=ps_... node cli/paste.js upload index.html --ttl 7d</code></pre>
+          </div>
+
+          <div>
+            <h3>List Pastes</h3>
+            <pre><code>PASTE_API_KEY=ps_... node cli/paste.js list</code></pre>
+          </div>
+
+          <div>
+            <h3>API Reference</h3>
+            <p>Base URL: <code><%= baseUrl %></code></p>
+            <pre><code><span class="method">POST</span>   <span class="endpoint">/api/pastes</span>
+  Authorization: Bearer ps_...
+  X-TTL: 3d (optional: 1h, 3h, 1d, 3d, 7d, 30d, indefinite)
+  Body: raw HTML
+
+<span class="method">GET</span>    <span class="endpoint">/api/pastes</span>
+  Authorization: Bearer ps_...
+
+<span class="method">GET</span>    <span class="endpoint">/api/pastes/:id</span>
+  Authorization: Bearer ps_...
+
+<span class="method">DELETE</span> <span class="endpoint">/api/pastes/:id</span>
+  Authorization: Bearer ps_...</code></pre>
+          </div>
+
+          <div>
+            <h3>opencode Skill</h3>
+            <p>Copy <code>skills/paste-service.md</code> to <code>~/.config/opencode/skills/</code> to enable it in the opencode CLI.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="modal-overlay" id="uploadModal">
+    <div class="modal">
+      <div class="modal-title">Upload HTML</div>
+      <div class="modal-desc">Paste raw HTML and pick how long it should live.</div>
+      <form class="upload-form" onsubmit="event.preventDefault(); doUpload();">
+        <div class="row">
+          <label class="label" for="uploadTtl" style="margin-bottom:0;padding-top:8px">TTL</label>
+          <select id="uploadTtl" class="select">
+            <option value="1h">1 hour</option>
+            <option value="3h">3 hours</option>
+            <option value="1d">1 day</option>
+            <option value="3d" selected>3 days</option>
+            <option value="7d">7 days</option>
+            <option value="30d">30 days</option>
+            <option value="indefinite">Indefinite</option>
+          </select>
+        </div>
+        <div class="row">
+          <label class="label" for="uploadHtml" style="margin-bottom:0">HTML</label>
+          <textarea id="uploadHtml" placeholder="<html>...</html>" required></textarea>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn" onclick="hideModal('uploadModal')">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="uploadBtn">Upload</button>
+        </div>
       </form>
     </div>
   </div>
 
-  <div class="section">
-    <div class="section-title">Your Pastes (<%= pastes.length %>)</div>
-    <% if (pastes.length === 0) { %>
-      <div class="empty">No pastes yet. Upload some HTML!</div>
-    <% } else { %>
-      <div class="grid">
-        <% pastes.forEach(function(p) { %>
-          <div class="card" id="paste-<%= p.id %>">
-            <div class="card-preview">
-              <iframe src="/p/<%= p.id %>" sandbox="allow-same-origin" loading="lazy"></iframe>
-            </div>
-            <div class="card-info">
-              <div class="card-id">/p/<%= p.id %></div>
-              <div class="card-meta <%= p.expired ? 'card-expired' : '' %>">
-                <%= p.ttl %> <% if (p.expired) { %> (expired) <% } %>
-              </div>
-              <div class="card-actions">
-                <button class="btn btn-sm" onclick="copyUrl('<%= p.id %>')">Copy URL</button>
-                <button class="btn btn-sm btn-danger" onclick="deletePaste('<%= p.id %>')">Delete</button>
-              </div>
-            </div>
-          </div>
-        <% }); %>
-      </div>
-    <% } %>
-  </div>
-
-  <div class="section">
-    <div class="section-title">API Keys</div>
-    <table class="keys-table">
-      <thead>
-        <tr><th>Label</th><th>Created</th><th></th></tr>
-      </thead>
-      <tbody>
-        <% keys.forEach(function(k) { %>
-          <tr>
-            <td><%= k.label || '(unnamed)' %></td>
-            <td><%= new Date(k.created_at).toLocaleDateString() %></td>
-            <td><button class="btn btn-sm btn-danger" onclick="deleteKey('<%= k.id %>')">Delete</button></td>
-          </tr>
-        <% }); %>
-      </tbody>
-    </table>
-  </div>
-
-  <div class="section">
-    <div class="section-title">Setup & API</div>
-    <div class="docs">
-      <h3>CLI Installation</h3>
-      <pre><code>npm install -g paste-cli
-# or run directly:
-node cli/paste.js</code></pre>
-
-      <h3>Upload HTML</h3>
-      <pre><code>PASTE_API_KEY=ps_... node cli/paste.js upload index.html
-PASTE_API_KEY=ps_... node cli/paste.js upload index.html --ttl 7d</code></pre>
-
-      <h3>List Pastes</h3>
-      <pre><code>PASTE_API_KEY=ps_... node cli/paste.js list</code></pre>
-
-      <h3>API Reference</h3>
-      <p>Base URL: <code><%= baseUrl %></code></p>
-      <pre><code># Upload
-POST /api/pastes
-Authorization: Bearer ps_...
-X-TTL: 3d (optional: 1h, 3h, 1d, 3d, 7d, 30d, indefinite)
-Body: raw HTML
-
-# List
-GET /api/pastes
-Authorization: Bearer ps_...
-
-# Get
-GET /api/pastes/:id
-Authorization: Bearer ps_...
-
-# Delete
-DELETE /api/pastes/:id
-Authorization: Bearer ps_...</code></pre>
-
-      <h3>opencode Skill</h3>
-      <p>Copy <code>skills/paste-service.md</code> to your <code>~/.config/opencode/skills/</code> directory.</p>
-    </div>
-  </div>
-
-  <!-- Upload Modal -->
-  <div class="modal-overlay" id="uploadModal">
-    <div class="modal">
-      <h2>Upload HTML</h2>
-      <select id="uploadTtl" style="width:100%;background:#0d0d0d;border:1px solid #333;border-radius:4px;color:#fff;font-family:inherit;font-size:0.85rem;padding:0.5rem;margin-bottom:0.75rem">
-        <option value="1h">1 hour</option>
-        <option value="3h">3 hours</option>
-        <option value="1d">1 day</option>
-        <option value="3d" selected>3 days (default)</option>
-        <option value="7d">7 days</option>
-        <option value="30d">30 days</option>
-        <option value="indefinite">Indefinite</option>
-      </select>
-      <textarea id="uploadHtml" rows="10" placeholder="Paste your HTML here..."></textarea>
-      <div class="btn-row">
-        <button class="btn btn-secondary" onclick="hideModal('uploadModal')">Cancel</button>
-        <button class="btn" id="uploadBtn" onclick="doUpload()">Upload</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Key Modal -->
   <div class="modal-overlay" id="keyModal">
     <div class="modal">
-      <h2>Create API Key</h2>
-      <input id="keyLabel" type="text" placeholder="Label (optional)" />
-      <div class="btn-row">
-        <button class="btn btn-secondary" onclick="hideModal('keyModal')">Cancel</button>
-        <button class="btn" onclick="doCreateKey()">Create</button>
-      </div>
+      <div class="modal-title">Create API Key</div>
+      <div class="modal-desc">Used to authenticate CLI uploads and API requests.</div>
+      <form onsubmit="event.preventDefault(); doCreateKey();">
+        <label class="label" for="keyLabel">Label</label>
+        <input id="keyLabel" class="input" type="text" placeholder="e.g. laptop, work" />
+        <div class="modal-actions">
+          <button type="button" class="btn" onclick="hideModal('keyModal')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Create</button>
+        </div>
+      </form>
     </div>
   </div>
 
-  <!-- Key Result Modal -->
   <div class="modal-overlay" id="keyResultModal">
     <div class="modal">
-      <h2>Save Your Credentials</h2>
-      <p style="color:#f44;margin-bottom:1rem;font-size:0.85rem">These will NOT be shown again. Save them now.</p>
-      <label style="color:#888;font-size:0.85rem">Mnemonic Phrase</label>
-      <textarea id="resultMnemonic" readonly rows="3" style="margin-bottom:1rem"></textarea>
-      <label style="color:#888;font-size:0.85rem">API Key</label>
-      <input id="resultApiKey" readonly />
-      <div class="btn-row">
-        <button class="btn" onclick="copyCreds()">Copy All</button>
-        <button class="btn btn-secondary" onclick="hideModal('keyResultModal')">Close</button>
+      <div class="modal-title">Save your credentials</div>
+      <div class="cred-warning">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6.5"/><path d="M8 5v3.5M8 11h.01"/></svg>
+        <div>These will not be shown again. Save them somewhere safe now.</div>
+      </div>
+      <label class="label" for="resultMnemonic">Mnemonic Phrase</label>
+      <textarea id="resultMnemonic" class="textarea" readonly rows="2" style="min-height:auto"></textarea>
+      <label class="label" for="resultApiKey" style="margin-top:var(--space-3)">API Key</label>
+      <input id="resultApiKey" class="input mono" readonly />
+      <div class="modal-actions">
+        <button type="button" class="btn" onclick="hideModal('keyResultModal')">Close</button>
+        <button type="button" class="btn btn-primary" onclick="copyCreds()">Copy All</button>
       </div>
     </div>
   </div>
 
   <div class="toast" id="toast"></div>
 
+  <%- include('partials/theme') %>
+
   <script>
     function showToast(msg) {
       const t = document.getElementById('toast');
       t.textContent = msg;
       t.classList.add('show');
-      setTimeout(() => t.classList.remove('show'), 2000);
+      clearTimeout(t._timer);
+      t._timer = setTimeout(() => t.classList.remove('show'), 2000);
     }
 
-    function hideModal(id) {
-      document.getElementById(id).classList.remove('active');
-    }
-
+    function hideModal(id) { document.getElementById(id).classList.remove('active'); }
     function showUploadModal() {
+      document.getElementById('uploadHtml').value = '';
       document.getElementById('uploadModal').classList.add('active');
+      setTimeout(() => document.getElementById('uploadHtml').focus(), 50);
+    }
+    function showKeyModal() {
+      document.getElementById('keyLabel').value = '';
+      document.getElementById('keyModal').classList.add('active');
+      setTimeout(() => document.getElementById('keyLabel').focus(), 50);
     }
 
-    function showKeyModal() {
-      document.getElementById('keyModal').classList.add('active');
-    }
+    document.querySelectorAll('.modal-overlay').forEach(o => {
+      o.addEventListener('click', e => { if (e.target === o) o.classList.remove('active'); });
+    });
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') document.querySelectorAll('.modal-overlay.active').forEach(m => m.classList.remove('active'));
+    });
 
     async function doUpload() {
       const html = document.getElementById('uploadHtml').value;
       const ttl = document.getElementById('uploadTtl').value;
       const btn = document.getElementById('uploadBtn');
       if (!html.trim()) return;
-
       btn.disabled = true;
       try {
         const res = await fetch('/api/pastes', {
@@ -361,11 +388,10 @@ Authorization: Bearer ps_...</code></pre>
         const data = await res.json();
         if (res.ok) {
           hideModal('uploadModal');
-          document.getElementById('uploadHtml').value = '';
-          showToast('Uploaded! ' + data.url);
-          setTimeout(() => location.reload(), 500);
+          showToast('Uploaded: ' + data.url);
+          setTimeout(() => location.reload(), 400);
         } else {
-          showToast('Error: ' + data.error);
+          showToast('Error: ' + (data.error || 'upload failed'));
         }
       } finally {
         btn.disabled = false;
@@ -393,7 +419,7 @@ Authorization: Bearer ps_...</code></pre>
         document.getElementById('resultApiKey').value = data.apiKey;
         document.getElementById('keyResultModal').classList.add('active');
       } else {
-        showToast('Error: ' + data.error);
+        showToast('Error: ' + (data.error || 'create failed'));
       }
     }
 
@@ -401,20 +427,19 @@ Authorization: Bearer ps_...</code></pre>
       if (!confirm('Delete this key? All associated pastes will be deleted too.')) return;
       await fetch('/api/keys/' + id, { method: 'DELETE' });
       showToast('Key deleted');
-      setTimeout(() => location.reload(), 500);
+      setTimeout(() => location.reload(), 400);
     }
 
     function copyUrl(id) {
-      const url = window.location.origin + '/p/' + id;
-      navigator.clipboard.writeText(url);
-      showToast('URL copied!');
+      navigator.clipboard.writeText(window.location.origin + '/p/' + id);
+      showToast('URL copied');
     }
 
     function copyCreds() {
       const m = document.getElementById('resultMnemonic').value;
       const k = document.getElementById('resultApiKey').value;
       navigator.clipboard.writeText('Mnemonic: ' + m + '\nAPI Key: ' + k);
-      showToast('Copied!');
+      showToast('Copied to clipboard');
     }
   </script>
 </body>

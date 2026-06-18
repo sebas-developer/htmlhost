@@ -1,144 +1,96 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>htmlhost — Login</title>
+  <%- include('partials/head', { title: 'htmlhost — Login' }) %>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: 'SF Mono', 'Fira Code', monospace;
-      background: #0a0a0a;
-      color: #e0e0e0;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
+    body { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: var(--space-4); }
+    .theme-fab { position: fixed; top: var(--space-4); right: var(--space-4); }
+    .login-card { width: 100%; max-width: 400px; }
+    .brand { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-7); }
+    .brand-mark { width: 18px; height: 18px; background: var(--text); }
+    .brand-name { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+    h1 { font-size: 24px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: var(--space-2); }
+    .sub { color: var(--text-muted); font-size: 14px; margin-bottom: var(--space-6); }
+    .form { display: flex; flex-direction: column; gap: var(--space-4); }
+    .hint {
+      margin-top: var(--space-6); padding-top: var(--space-5);
+      border-top: 1px solid var(--border);
+      font-size: 12px; color: var(--text-muted);
     }
-    .container {
-      background: #111;
-      border: 1px solid #222;
-      border-radius: 8px;
-      padding: 2rem;
-      width: 420px;
-      max-width: 90vw;
-    }
-    h1 { font-size: 1.5rem; margin-bottom: 0.5rem; color: #fff; }
-    .subtitle { color: #666; font-size: 0.85rem; margin-bottom: 1.5rem; }
-    label { display: block; font-size: 0.85rem; color: #888; margin-bottom: 0.5rem; }
-    textarea {
-      width: 100%;
-      background: #0d0d0d;
-      border: 1px solid #333;
-      border-radius: 4px;
-      color: #fff;
-      font-family: inherit;
-      font-size: 0.9rem;
-      padding: 0.75rem;
-      resize: vertical;
-      height: 100px;
-    }
-    textarea:focus { outline: none; border-color: #555; }
-    .btn {
-      width: 100%;
-      margin-top: 1rem;
-      padding: 0.75rem;
-      background: #fff;
-      color: #000;
-      border: none;
-      border-radius: 4px;
-      font-family: inherit;
-      font-size: 0.9rem;
-      font-weight: 600;
-      cursor: pointer;
-    }
-    .btn:hover { background: #ddd; }
-    .btn:disabled { background: #333; color: #666; cursor: not-allowed; }
-    .error { color: #f44; font-size: 0.85rem; margin-top: 1rem; text-align: center; display: none; }
-    .deriving { color: #888; font-size: 0.85rem; margin-top: 1rem; text-align: center; display: none; }
-    .cli-hint {
-      margin-top: 1.5rem;
-      padding-top: 1rem;
-      border-top: 1px solid #222;
-      font-size: 0.8rem;
-      color: #555;
-    }
-    .cli-hint code { color: #888; }
+    .hint code { color: var(--text); background: var(--code-bg); padding: 1px 5px; }
+    .msg { font-size: 13px; padding: var(--space-2) var(--space-3); border: 1px solid var(--border); display: none; }
+    .msg.show { display: block; }
+    .msg.error { color: var(--danger); border-color: var(--danger); background: var(--danger-soft); }
+    .msg.info { color: var(--text-muted); }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>htmlhost</h1>
-    <p class="subtitle">Enter your 12-word mnemonic phrase</p>
-    <form id="loginForm">
-      <label for="mnemonic">Mnemonic Phrase</label>
-      <textarea id="mnemonic" placeholder="word1 word2 word3 ..." autocomplete="off" spellcheck="false"></textarea>
-      <div class="deriving" id="deriving">Deriving key...</div>
-      <div class="error" id="error"></div>
-      <button type="submit" class="btn" id="submitBtn">Unlock</button>
+  <button class="icon-btn theme-fab" onclick="toggleTheme()" aria-label="Toggle theme" data-theme-icon></button>
+
+  <div class="login-card">
+    <div class="brand">
+      <div class="brand-mark"></div>
+      <div class="brand-name">htmlhost</div>
+    </div>
+
+    <h1>Sign in</h1>
+    <p class="sub">Enter your 12-word mnemonic to unlock.</p>
+
+    <form id="loginForm" class="form" autocomplete="off">
+      <div>
+        <label class="label" for="mnemonic">Mnemonic Phrase</label>
+        <textarea id="mnemonic" class="textarea" rows="3" placeholder="word1 word2 word3 ..." spellcheck="false" required></textarea>
+      </div>
+      <div class="msg info" id="deriving">Deriving key…</div>
+      <div class="msg error" id="error"></div>
+      <button type="submit" class="btn btn-primary btn-lg btn-block" id="submitBtn">Unlock</button>
     </form>
-    <div class="cli-hint">
-      No account? Run:<br>
-      <code>node cli/paste.js create-user</code>
+
+    <div class="hint">
+      No account? Create one with the CLI: <code>node cli/paste.js create-user</code>
     </div>
   </div>
+
+  <%- include('partials/theme') %>
+
   <script>
     const cryptoParams = <%- JSON.stringify(cryptoParams).replace(/</g, '\\u003c') %>;
-
     document.getElementById('loginForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const mnemonic = document.getElementById('mnemonic').value.trim();
       const errorEl = document.getElementById('error');
       const derivingEl = document.getElementById('deriving');
       const btn = document.getElementById('submitBtn');
-
-      errorEl.style.display = 'none';
-      derivingEl.style.display = 'block';
+      errorEl.classList.remove('show');
+      derivingEl.classList.add('show');
       btn.disabled = true;
-
       try {
         const normalized = mnemonic.toLowerCase().trim().split(/\s+/).join(' ');
         const salt = new TextEncoder().encode(cryptoParams.saltPrefix + normalized);
-
         const keyMaterial = await crypto.subtle.importKey(
-          'raw',
-          new TextEncoder().encode(normalized),
-          'PBKDF2',
-          false,
-          ['deriveBits']
+          'raw', new TextEncoder().encode(normalized), 'PBKDF2', false, ['deriveBits']
         );
-
         const derivedBits = await crypto.subtle.deriveBits(
-          {
-            name: 'PBKDF2',
-            salt: salt,
-            iterations: cryptoParams.iterations,
-            hash: 'SHA-256'
-          },
-          keyMaterial,
-          cryptoParams.keyLength * 8
+          { name: 'PBKDF2', salt, iterations: cryptoParams.iterations, hash: 'SHA-256' },
+          keyMaterial, cryptoParams.keyLength * 8
         );
-
         const apiKey = 'ps_' + Array.from(new Uint8Array(derivedBits)).slice(0, 16).map(b => b.toString(16).padStart(2, '0')).join('');
-
         const res = await fetch('/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ mnemonic })
         });
-
         const data = await res.json();
         if (res.ok && data.success) {
           window.location.href = '/';
         } else {
           errorEl.textContent = data.error || 'Login failed';
-          errorEl.style.display = 'block';
+          errorEl.classList.add('show');
         }
       } catch (err) {
         errorEl.textContent = 'Derivation failed: ' + err.message;
-        errorEl.style.display = 'block';
+        errorEl.classList.add('show');
       } finally {
-        derivingEl.style.display = 'none';
+        derivingEl.classList.remove('show');
         btn.disabled = false;
       }
     });
