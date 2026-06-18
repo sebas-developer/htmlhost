@@ -1,4 +1,4 @@
-app = 'htmlhost'
+app = 'html-host'
 primary_region = 'iad'
 kill_signal = 'SIGTERM'
 kill_timeout = '5s'
@@ -13,6 +13,14 @@ kill_timeout = '5s'
 [[services]]
   internal_port = 3000
   protocol = 'tcp'
+
+  [[services.ports]]
+    handlers = ["http"]
+    port = 80
+
+  [[services.ports]]
+    handlers = ["tls", "http"]
+    port = 443
 
   [services.concurrency]
     type = 'connections'

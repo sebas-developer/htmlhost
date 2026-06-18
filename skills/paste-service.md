@@ -79,7 +79,7 @@ htmlhost delete-key <id>
 
 ## API (for direct use)
 
-Base URL: `https://htmlhost.fly.dev`
+Base URL: `https://html-host.fly.dev`
 
 ```bash
 # Upload
@@ -87,15 +87,15 @@ curl -X POST -H "Authorization: Bearer $PASTE_API_KEY" \
   -H "Content-Type: text/html" \
   -H "X-TTL: 3d" \
   --data-binary @index.html \
-  https://htmlhost.fly.dev/api/pastes
+  https://html-host.fly.dev/api/pastes
 
 # List
 curl -H "Authorization: Bearer $PASTE_API_KEY" \
-  https://htmlhost.fly.dev/api/pastes
+  https://html-host.fly.dev/api/pastes
 
 # Delete
 curl -X DELETE -H "Authorization: Bearer $PASTE_API_KEY" \
-  https://htmlhost.fly.dev/api/pastes/<id>
+  https://html-host.fly.dev/api/pastes/<id>
 ```
 
 ## Auth
@@ -106,7 +106,7 @@ No auth providers. No recovery. Credentials saved to `~/.htmlhost/config.json`.
 
 ## Dashboard
 
-Visit `https://htmlhost.fly.dev` in a browser. Enter mnemonic to log in.
+Visit `https://html-host.fly.dev` in a browser. Enter mnemonic to log in.
 View all pastes in a grid with iframe previews. Manage keys.
 
 ## Agent Workflow Summary

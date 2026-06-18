@@ -48,7 +48,7 @@ if (fs.existsSync(_configFile)) {
   try { _config = JSON.parse(fs.readFileSync(_configFile, 'utf8')); } catch {}
 }
 
-let BASE_URL = process.env.PASTE_URL || _config.url || 'https://htmlhost.fly.dev';
+let BASE_URL = process.env.PASTE_URL || _config.url || 'https://html-host.fly.dev';
 let API_KEY = process.env.PASTE_API_KEY || _config.apiKey;
 
 function request(method, urlPath, { body, headers = {} } = {}) {
