@@ -114,8 +114,52 @@
     .docs .method { display: inline-block; min-width: 56px; font-weight: 600; color: var(--accent); }
 
     .upload-form { display: flex; flex-direction: column; gap: var(--space-4); }
-    .upload-form .row { display: grid; grid-template-columns: 120px 1fr; gap: var(--space-3); align-items: start; }
-    .upload-form textarea { min-height: 180px; }
+    .upload-form .row { display: grid; grid-template-columns: 80px 1fr; gap: var(--space-3); align-items: start; }
+    .upload-form .row > .label { margin-bottom: 0; padding-top: 8px; }
+
+    .dropzone {
+      position: relative;
+      min-height: 140px;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--bg);
+      border: 1px dashed var(--border-strong);
+      cursor: pointer;
+      transition: border-color var(--t), background var(--t);
+    }
+    .dropzone:hover { border-color: var(--accent); background: var(--accent-soft); }
+    .dropzone.dragover { border-style: solid; border-color: var(--accent); background: var(--accent-soft); }
+    .dropzone.error { border-color: var(--danger); background: var(--danger-soft); }
+    .dropzone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+    .dz-empty, .dz-filled {
+      display: flex; flex-direction: column; align-items: center; gap: var(--space-2);
+      padding: var(--space-5); text-align: center;
+      pointer-events: none;
+    }
+    .dz-filled { display: none; flex-direction: row; align-items: center; gap: var(--space-3); text-align: left; padding: var(--space-3) var(--space-4); width: 100%; }
+    .dropzone.has-file .dz-empty { display: none; }
+    .dropzone.has-file .dz-filled { display: flex; }
+    .dropzone.has-file input[type="file"] { display: none; }
+    .dz-icon { width: 24px; height: 24px; color: var(--text-muted); }
+    .dz-title { font-size: 13px; font-weight: 500; color: var(--text); }
+    .dz-sub { font-size: 12px; color: var(--text-muted); }
+    .dz-sub .link { color: var(--accent); font-weight: 500; }
+    .dz-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .dz-name { font-family: var(--font-mono); font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dz-size { font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+    .dz-clear { pointer-events: auto; font-size: 12px; color: var(--danger); padding: var(--space-1) var(--space-2); }
+    .dz-clear:hover { background: var(--danger-soft); }
+
+    .paste-toggle { border-top: 1px solid var(--border); padding-top: var(--space-3); }
+    .paste-toggle summary {
+      list-style: none; cursor: pointer;
+      font-size: 12px; color: var(--text-muted);
+      user-select: none;
+    }
+    .paste-toggle summary::-webkit-details-marker { display: none; }
+    .paste-toggle summary::before { content: '+ '; color: var(--text-subtle); font-family: var(--font-mono); }
+    .paste-toggle[open] summary::before { content: '− '; }
+    .paste-toggle summary:hover { color: var(--text); }
+    .paste-toggle textarea { margin-top: var(--space-3); min-height: 140px; }
 
     .cred-warning {
       display: flex; gap: var(--space-3);
@@ -282,10 +326,10 @@ PASTE_API_KEY=ps_... node cli/paste.js upload index.html --ttl 7d</code></pre>
   <div class="modal-overlay" id="uploadModal">
     <div class="modal">
       <div class="modal-title">Upload HTML</div>
-      <div class="modal-desc">Paste raw HTML and pick how long it should live.</div>
+      <div class="modal-desc">Drop a file, browse, or paste HTML directly.</div>
       <form class="upload-form" onsubmit="event.preventDefault(); doUpload();">
         <div class="row">
-          <label class="label" for="uploadTtl" style="margin-bottom:0;padding-top:8px">TTL</label>
+          <label class="label" for="uploadTtl">TTL</label>
           <select id="uploadTtl" class="select">
             <option value="1h">1 hour</option>
             <option value="3h">3 hours</option>
@@ -297,9 +341,34 @@ PASTE_API_KEY=ps_... node cli/paste.js upload index.html --ttl 7d</code></pre>
           </select>
         </div>
         <div class="row">
-          <label class="label" for="uploadHtml" style="margin-bottom:0">HTML</label>
-          <textarea id="uploadHtml" placeholder="<html>...</html>" required></textarea>
+          <label class="label">File</label>
+          <div class="dropzone" id="dropzone">
+            <input type="file" id="fileInput" accept=".html,.htm,.txt,text/html,text/plain">
+            <div class="dz-empty">
+              <svg class="dz-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M12 16V4M12 4l-4 4M12 4l4 4"/>
+                <path d="M4 14v4a2 2 0 002 2h12a2 2 0 002-2v-4"/>
+              </svg>
+              <div class="dz-title">Drop HTML file</div>
+              <div class="dz-sub">or <span class="link">click to browse</span></div>
+            </div>
+            <div class="dz-filled">
+              <svg class="dz-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                <path d="M14 2v6h6"/>
+              </svg>
+              <div class="dz-info">
+                <div class="dz-name" id="dzName"></div>
+                <div class="dz-size" id="dzSize"></div>
+              </div>
+              <button type="button" class="dz-clear" id="dzClear">Remove</button>
+            </div>
+          </div>
         </div>
+        <details class="paste-toggle">
+          <summary>paste HTML directly</summary>
+          <textarea id="uploadHtml" placeholder="<html>...</html>"></textarea>
+        </details>
         <div class="modal-actions">
           <button type="button" class="btn" onclick="hideModal('uploadModal')">Cancel</button>
           <button type="submit" class="btn btn-primary" id="uploadBtn">Upload</button>
@@ -356,9 +425,8 @@ PASTE_API_KEY=ps_... node cli/paste.js upload index.html --ttl 7d</code></pre>
 
     function hideModal(id) { document.getElementById(id).classList.remove('active'); }
     function showUploadModal() {
-      document.getElementById('uploadHtml').value = '';
+      resetUploadModal();
       document.getElementById('uploadModal').classList.add('active');
-      setTimeout(() => document.getElementById('uploadHtml').focus(), 50);
     }
     function showKeyModal() {
       document.getElementById('keyLabel').value = '';
@@ -373,11 +441,73 @@ PASTE_API_KEY=ps_... node cli/paste.js upload index.html --ttl 7d</code></pre>
       if (e.key === 'Escape') document.querySelectorAll('.modal-overlay.active').forEach(m => m.classList.remove('active'));
     });
 
+    const MAX_BYTES = 1024 * 1024;
+    let uploadFile = null;
+    function formatBytes(b) {
+      if (b < 1024) return b + ' B';
+      if (b < 1024 * 1024) return (b / 1024).toFixed(1) + ' KB';
+      return (b / 1024 / 1024).toFixed(2) + ' MB';
+    }
+    function resetUploadModal() {
+      uploadFile = null;
+      const dz = document.getElementById('dropzone');
+      dz.classList.remove('has-file', 'error', 'dragover');
+      document.getElementById('uploadHtml').value = '';
+      document.getElementById('fileInput').value = '';
+    }
+    async function setUploadFile(file) {
+      const dz = document.getElementById('dropzone');
+      dz.classList.remove('error', 'dragover');
+      if (!file) { resetUploadModal(); return; }
+      if (file.size > MAX_BYTES) {
+        dz.classList.add('error');
+        showToast('File too large (max 1 MB)');
+        return;
+      }
+      if (file.size === 0) {
+        dz.classList.add('error');
+        showToast('File is empty');
+        return;
+      }
+      try {
+        const text = await file.text();
+        uploadFile = { name: file.name, size: file.size, text };
+        document.getElementById('dzName').textContent = file.name;
+        document.getElementById('dzSize').textContent = formatBytes(file.size);
+        dz.classList.add('has-file');
+      } catch (err) {
+        dz.classList.add('error');
+        showToast('Could not read file: ' + err.message);
+      }
+    }
+    (function setupDropzone() {
+      const dz = document.getElementById('dropzone');
+      const input = document.getElementById('fileInput');
+      let dragDepth = 0;
+      dz.addEventListener('dragenter', e => {
+        e.preventDefault();
+        dragDepth++;
+        if (e.dataTransfer.types.includes('Files')) dz.classList.add('dragover');
+      });
+      dz.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
+      dz.addEventListener('dragleave', () => { if (--dragDepth <= 0) { dragDepth = 0; dz.classList.remove('dragover'); } });
+      dz.addEventListener('drop', e => {
+        e.preventDefault();
+        dragDepth = 0;
+        dz.classList.remove('dragover');
+        const f = e.dataTransfer.files[0];
+        if (f) setUploadFile(f);
+      });
+      input.addEventListener('change', e => { const f = e.target.files[0]; if (f) setUploadFile(f); });
+      document.getElementById('dzClear').addEventListener('click', e => { e.stopPropagation(); resetUploadModal(); });
+    })();
+
     async function doUpload() {
-      const html = document.getElementById('uploadHtml').value;
       const ttl = document.getElementById('uploadTtl').value;
+      const textarea = document.getElementById('uploadHtml').value;
+      const html = uploadFile ? uploadFile.text : textarea;
       const btn = document.getElementById('uploadBtn');
-      if (!html.trim()) return;
+      if (!html || !html.trim()) { showToast('Pick a file or paste HTML'); return; }
       btn.disabled = true;
       try {
         const res = await fetch('/api/pastes', {
