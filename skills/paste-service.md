@@ -11,58 +11,74 @@ description: >
 
 Upload HTML files to get random URLs. Auto-deletes after configurable TTL.
 
-## Agent Auto-Setup (Run This First)
+## Credential Management
 
-When user asks to upload/host HTML, run these steps IN ORDER:
+All credentials are stored in `~/.htmlhost/config.json`. The agent MUST manage this file.
 
+```json
+{
+  "mnemonic": "word1 word2 ... word12",
+  "apiKey": "ps_...",
+  "url": "https://html-host.fly.dev"
+}
+```
+
+### First-Time Setup
+
+Check if credentials exist:
 ```bash
-# Step 1: Install CLI globally from GitHub
+cat ~/.htmlhost/config.json 2>/dev/null || echo "NEEDS_SETUP"
+```
+
+If file doesn't exist, run setup:
+```bash
 npm install -g https://github.com/sebas-developer/htmlhost
-
-# Step 2: Run setup (creates account + saves credentials)
 htmlhost setup
-
-# Step 3: Upload the file
-htmlhost upload index.html
-# Or with custom TTL:
-htmlhost upload index.html --ttl 7d
 ```
 
-The `setup` command:
-- Generates a 12-word mnemonic (crypto-style auth)
-- Registers with the server
-- Saves API key to `~/.htmlhost/config.json`
-- Shows mnemonic ONCE — tell user to save it
-
-## If Already Setup
-
-Check if configured:
+After setup, read the config file to get credentials:
 ```bash
-cat ~/.htmlhost/config.json 2>/dev/null && echo "Configured" || echo "Needs setup"
+cat ~/.htmlhost/config.json
 ```
 
-If exists, skip straight to upload.
+**IMPORTANT:** After setup, tell the user their mnemonic for safekeeping. The agent has it in the config but the user should back it up separately.
+
+### Retrieving Credentials
+
+```bash
+htmlhost show-credentials
+# Or read directly:
+cat ~/.htmlhost/config.json | jq -r .mnemonic
+cat ~/.htmlhost/config.json | jq -r .apiKey
+```
+
+### If Config Exists
+
+Skip setup. Just use the CLI — it reads `~/.htmlhost/config.json` automatically.
+
+## Agent Workflow
+
+When user asks to upload/host HTML:
+
+1. **Check setup:** `cat ~/.htmlhost/config.json 2>/dev/null || echo "NEEDS_SETUP"`
+2. **If needs setup:** run `npm install -g https://github.com/sebas-developer/htmlhost && htmlhost setup`
+3. **Upload:** `htmlhost upload <file> --ttl <duration>`
+4. **Report URL:** `https://html-host.fly.dev/p/<id>`
+
+The agent should store the config path and read it when needed. No env vars required after setup.
 
 ## CLI Commands
 
 ```bash
-# Upload HTML
-htmlhost upload index.html
-htmlhost upload index.html --ttl 7d
-
-# List pastes
-htmlhost list
-
-# Delete paste
-htmlhost delete <id>
-
-# Get paste info
-htmlhost info <id>
-
-# Manage keys
-htmlhost create-key "label"
-htmlhost keys
-htmlhost delete-key <id>
+htmlhost setup                    # Create account + save all credentials
+htmlhost show-credentials         # Show saved mnemonic + API key
+htmlhost upload <file> [--ttl]    # Upload HTML
+htmlhost list                     # List pastes
+htmlhost delete <id>              # Delete paste
+htmlhost info <id>                # Paste details
+htmlhost keys                     # List API keys
+htmlhost create-key [label]       # New API key
+htmlhost delete-key <id>          # Delete key + pastes
 ```
 
 ## TTL Options
@@ -77,41 +93,29 @@ htmlhost delete-key <id>
 | `30d` | 30 days |
 | `indefinite` | Never expires |
 
-## API (for direct use)
+## API Reference
 
 Base URL: `https://html-host.fly.dev`
 
-```bash
-# Upload
-curl -X POST -H "Authorization: Bearer $PASTE_API_KEY" \
-  -H "Content-Type: text/html" \
-  -H "X-TTL: 3d" \
-  --data-binary @index.html \
-  https://html-host.fly.dev/api/pastes
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/pastes` | Upload HTML (body: raw HTML, header: `X-TTL`) |
+| `GET` | `/api/pastes` | List your pastes |
+| `GET` | `/api/pastes/:id` | Get paste + HTML |
+| `DELETE` | `/api/pastes/:id` | Delete paste |
+| `POST` | `/api/keys` | Create new key |
+| `GET` | `/api/keys` | List keys |
+| `DELETE` | `/api/keys/:id` | Delete key (cascades) |
+| `GET` | `/health` | Health check |
 
-# List
-curl -H "Authorization: Bearer $PASTE_API_KEY" \
-  https://html-host.fly.dev/api/pastes
-
-# Delete
-curl -X DELETE -H "Authorization: Bearer $PASTE_API_KEY" \
-  https://html-host.fly.dev/api/pastes/<id>
-```
+All endpoints require `Authorization: Bearer <api-key>`.
 
 ## Auth
 
-Mnemonic-based (crypto-style). CLI generates a 12-word mnemonic phrase.
-The mnemonic derives your API key deterministically. Lose the mnemonic = lose access.
-No auth providers. No recovery. Credentials saved to `~/.htmlhost/config.json`.
+Mnemonic-based (crypto-style). 12-word BIP39 phrase derives API key via PBKDF2.
+Server stores only SHA-256 hash. Lose mnemonic = lose access. No recovery.
 
 ## Dashboard
 
-Visit `https://html-host.fly.dev` in a browser. Enter mnemonic to log in.
-View all pastes in a grid with iframe previews. Manage keys.
-
-## Agent Workflow Summary
-
-1. `npm install -g https://github.com/sebas-developer/htmlhost`
-2. `htmlhost setup` (first time only)
-3. `htmlhost upload <file> [--ttl <duration>]`
-4. Report URL to user: `https://htmlhost.fly.dev/p/<id>`
+Visit `https://html-host.fly.dev`, enter mnemonic to log in.
+Grid preview of all pastes, key management, API docs.

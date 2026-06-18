@@ -94,7 +94,8 @@ Usage:
   htmlhost <command> [args]
 
 Commands:
-  setup                    Create account + configure (run this first)
+  setup                    Create account + save credentials
+  show-credentials         Show saved mnemonic and API key
   upload <file> [opts]     Upload HTML file
     --ttl <duration>       1h, 3h, 1d, 3d (default), 7d, 30d, indefinite
   list                     List your pastes
@@ -104,9 +105,9 @@ Commands:
   create-key [label]       Create new API key
   delete-key <id>          Delete an API key
 
-Environment:
-  PASTE_API_KEY            Your API key
-  PASTE_URL                Service URL (default: https://htmlhost.fly.dev)
+Config: ~/.htmlhost/config.json
+  Stores mnemonic, API key, and server URL.
+  Agent reads this file automatically.
 `);
 }
 
@@ -130,16 +131,19 @@ async function setup() {
   const configDir = path.join(require('os').homedir(), '.htmlhost');
   const configFile = path.join(configDir, 'config.json');
   fs.mkdirSync(configDir, { recursive: true });
-  fs.writeFileSync(configFile, JSON.stringify({ apiKey, url: BASE_URL }, null, 2));
+  fs.writeFileSync(configFile, JSON.stringify({ mnemonic, apiKey, url: BASE_URL }, null, 2));
 
   console.log('  Account created!\n');
   console.log('  ┌─────────────────────────────────────────────────────┐');
-  console.log('  │  SAVE YOUR MNEMONIC — NO RECOVERY POSSIBLE         │');
+  console.log('  │  CREDENTIALS SAVED                                  │');
   console.log('  │                                                     │');
-  console.log('  │  ' + mnemonic + '  │');
+  console.log('  │  Config: ' + configFile + '  │');
   console.log('  │                                                     │');
-  console.log('  │  API Key: ' + apiKey + '  │');
-  console.log('  │  Config:  ' + configFile + '  │');
+  console.log('  │  Mnemonic: ' + mnemonic + '  │');
+  console.log('  │  API Key:  ' + apiKey + '  │');
+  console.log('  │                                                     │');
+  console.log('  │  Save your mnemonic somewhere safe as backup.       │');
+  console.log('  └─────────────────────────────────────────────────────┘\n');
   console.log('  └─────────────────────────────────────────────────────┘\n');
 }
 
@@ -156,6 +160,20 @@ async function main() {
     }
 
     switch (command) {
+      case 'show-credentials': {
+        const configFile = path.join(require('os').homedir(), '.htmlhost', 'config.json');
+        if (!fs.existsSync(configFile)) {
+          console.error('No credentials found. Run "htmlhost setup" first.');
+          process.exit(1);
+        }
+        const cfg = JSON.parse(fs.readFileSync(configFile, 'utf8'));
+        console.log('\n  Stored credentials:\n');
+        console.log('  Mnemonic: ' + (cfg.mnemonic || '(not saved — too late to recover)'));
+        console.log('  API Key:  ' + cfg.apiKey);
+        console.log('  Server:   ' + cfg.url);
+        console.log('  Config:   ' + configFile + '\n');
+        break;
+      }
       case 'upload': {
         if (!args[1]) { console.error('Error: file path required'); process.exit(1); }
         const filePath = path.resolve(args[1]);
