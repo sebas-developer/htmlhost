@@ -1,0 +1,27 @@
+app = 'htmlhost'
+primary_region = 'iad'
+kill_signal = 'SIGTERM'
+kill_timeout = '5s'
+
+[mounts]
+  source = 'data'
+  destination = '/data'
+
+[env]
+  PORT = '3000'
+
+[[services]]
+  internal_port = 3000
+  protocol = 'tcp'
+
+  [services.concurrency]
+    type = 'connections'
+    hard_limit = 100
+    soft_limit = 50
+
+  [[services.http_checks]]
+    interval = '10s'
+    timeout = '3s'
+    grace_period = '5s'
+    method = 'GET'
+    path = '/health'

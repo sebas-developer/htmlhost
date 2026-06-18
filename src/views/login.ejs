@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>htmlhost — Login</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      background: #0a0a0a;
+      color: #e0e0e0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+    .container {
+      background: #111;
+      border: 1px solid #222;
+      border-radius: 8px;
+      padding: 2rem;
+      width: 420px;
+      max-width: 90vw;
+    }
+    h1 { font-size: 1.5rem; margin-bottom: 0.5rem; color: #fff; }
+    .subtitle { color: #666; font-size: 0.85rem; margin-bottom: 1.5rem; }
+    label { display: block; font-size: 0.85rem; color: #888; margin-bottom: 0.5rem; }
+    textarea {
+      width: 100%;
+      background: #0d0d0d;
+      border: 1px solid #333;
+      border-radius: 4px;
+      color: #fff;
+      font-family: inherit;
+      font-size: 0.9rem;
+      padding: 0.75rem;
+      resize: vertical;
+      height: 100px;
+    }
+    textarea:focus { outline: none; border-color: #555; }
+    .btn {
+      width: 100%;
+      margin-top: 1rem;
+      padding: 0.75rem;
+      background: #fff;
+      color: #000;
+      border: none;
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn:hover { background: #ddd; }
+    .btn:disabled { background: #333; color: #666; cursor: not-allowed; }
+    .error { color: #f44; font-size: 0.85rem; margin-top: 1rem; text-align: center; display: none; }
+    .deriving { color: #888; font-size: 0.85rem; margin-top: 1rem; text-align: center; display: none; }
+    .cli-hint {
+      margin-top: 1.5rem;
+      padding-top: 1rem;
+      border-top: 1px solid #222;
+      font-size: 0.8rem;
+      color: #555;
+    }
+    .cli-hint code { color: #888; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>htmlhost</h1>
+    <p class="subtitle">Enter your 12-word mnemonic phrase</p>
+    <form id="loginForm">
+      <label for="mnemonic">Mnemonic Phrase</label>
+      <textarea id="mnemonic" placeholder="word1 word2 word3 ..." autocomplete="off" spellcheck="false"></textarea>
+      <div class="deriving" id="deriving">Deriving key...</div>
+      <div class="error" id="error"></div>
+      <button type="submit" class="btn" id="submitBtn">Unlock</button>
+    </form>
+    <div class="cli-hint">
+      No account? Run:<br>
+      <code>node cli/paste.js create-user</code>
+    </div>
+  </div>
+  <script>
+    const cryptoParams = <%- JSON.stringify(cryptoParams) %>;
+
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const mnemonic = document.getElementById('mnemonic').value.trim();
+      const errorEl = document.getElementById('error');
+      const derivingEl = document.getElementById('deriving');
+      const btn = document.getElementById('submitBtn');
+
+      errorEl.style.display = 'none';
+      derivingEl.style.display = 'block';
+      btn.disabled = true;
+
+      try {
+        const normalized = mnemonic.toLowerCase().trim().split(/\s+/).join(' ');
+        const salt = new TextEncoder().encode(cryptoParams.saltPrefix + normalized);
+
+        const keyMaterial = await crypto.subtle.importKey(
+          'raw',
+          new TextEncoder().encode(normalized),
+          'PBKDF2',
+          false,
+          ['deriveBits']
+        );
+
+        const derivedBits = await crypto.subtle.deriveBits(
+          {
+            name: 'PBKDF2',
+            salt: salt,
+            iterations: cryptoParams.iterations,
+            hash: 'SHA-256'
+          },
+          keyMaterial,
+          cryptoParams.keyLength * 8
+        );
+
+        const apiKey = 'ps_' + Array.from(new Uint8Array(derivedBits)).slice(0, 16).map(b => b.toString(16).padStart(2, '0')).join('');
+
+        const res = await fetch('/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mnemonic })
+        });
+
+        const data = await res.json();
+        if (res.ok && data.success) {
+          window.location.href = '/';
+        } else {
+          errorEl.textContent = data.error || 'Login failed';
+          errorEl.style.display = 'block';
+        }
+      } catch (err) {
+        errorEl.textContent = 'Derivation failed: ' + err.message;
+        errorEl.style.display = 'block';
+      } finally {
+        derivingEl.style.display = 'none';
+        btn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
