@@ -10,24 +10,18 @@ kill_timeout = '5s'
 [env]
   PORT = '3000'
 
-[[services]]
+[http_service]
   internal_port = 3000
-  protocol = 'tcp'
+  force_https = true
+  auto_stop_machines = 'suspend'
+  auto_start_machines = true
 
-  [[services.ports]]
-    handlers = ["http"]
-    port = 80
-
-  [[services.ports]]
-    handlers = ["tls", "http"]
-    port = 443
-
-  [services.concurrency]
-    type = 'connections'
+  [http_service.concurrency]
+    type = 'requests'
+    soft_limit = 25
     hard_limit = 100
-    soft_limit = 50
 
-  [[services.http_checks]]
+  [[http_service.checks]]
     interval = '10s'
     timeout = '3s'
     grace_period = '5s'

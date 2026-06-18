@@ -23,6 +23,22 @@ app.use(helmet({
 // Init DB
 getDb();
 
+// Resume safety: validate SQLite handle on every request.
+// After a Fly Machine resume (auto_stop_machines = 'suspend'), the volume
+// survives but the in-process handle can be in a stale state (clock skew,
+// deferred fs ops). One sub-ms query re-initializes if needed before the
+// route runs. Designed for resume AND cold start.
+app.use((req, res, next) => {
+  try {
+    getDb().prepare('SELECT 1').get();
+  } catch (err) {
+    console.warn('[db] handle invalid, reinitializing:', err.message);
+    close();
+    getDb();
+  }
+  next();
+});
+
 // Middleware
 app.use(express.text({ type: 'text/html', limit: '1mb' }));
 app.use(express.json({ limit: '1mb' }));
