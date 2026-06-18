@@ -1,8 +1,25 @@
 const path = require('path');
+const fs = require('fs');
+const crypto = require('crypto');
+
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
+
+// Persist session secret across restarts
+function getSecret() {
+  const secretFile = path.join(DATA_DIR, '.session-secret');
+  try {
+    return fs.readFileSync(secretFile, 'utf8');
+  } catch {
+    const secret = crypto.randomBytes(32).toString('hex');
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(secretFile, secret);
+    return secret;
+  }
+}
 
 module.exports = {
   PORT: parseInt(process.env.PORT || '3000', 10),
-  DATA_DIR: process.env.DATA_DIR || path.join(__dirname, '..', 'data'),
-  SESSION_SECRET: process.env.SESSION_SECRET || require('crypto').randomBytes(32).toString('hex'),
+  DATA_DIR,
+  SESSION_SECRET: getSecret(),
   MAX_PASTE_SIZE: 1024 * 1024, // 1MB
 };
