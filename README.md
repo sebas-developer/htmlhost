@@ -13,13 +13,13 @@
 
 ## Install the Skill
 
-One command per wrapper. Pick yours.
+One command per wrapper. Same skill file, different destination.
 
 ### OpenCode
 
 ```bash
 mkdir -p ~/.config/opencode/skills && \
-curl -fsSL https://raw.githubusercontent.com/sebas-developer/htmlhost/main/skills/opencode/SKILL.md \
+curl -fsSL https://raw.githubusercontent.com/sebas-developer/htmlhost/main/skills/paste-service.md \
   -o ~/.config/opencode/skills/paste-service.md
 ```
 
@@ -27,7 +27,7 @@ curl -fsSL https://raw.githubusercontent.com/sebas-developer/htmlhost/main/skill
 
 ```bash
 mkdir -p ~/.claude/skills && \
-curl -fsSL https://raw.githubusercontent.com/sebas-developer/htmlhost/main/skills/claude-code/SKILL.md \
+curl -fsSL https://raw.githubusercontent.com/sebas-developer/htmlhost/main/skills/paste-service.md \
   -o ~/.claude/skills/paste-service.md
 ```
 
@@ -35,7 +35,7 @@ curl -fsSL https://raw.githubusercontent.com/sebas-developer/htmlhost/main/skill
 
 ```bash
 mkdir -p ~/.agents/skills && \
-curl -fsSL https://raw.githubusercontent.com/sebas-developer/htmlhost/main/skills/codex/SKILL.md \
+curl -fsSL https://raw.githubusercontent.com/sebas-developer/htmlhost/main/skills/paste-service.md \
   -o ~/.agents/skills/paste-service.md
 ```
 
