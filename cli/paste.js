@@ -25,19 +25,31 @@ function verifyPassword(password, stored) {
 
 function promptPassword(message = '  Password: ') {
   return new Promise((resolve) => {
-    const rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout,
-    });
-    // Hide input by temporarily overriding output
-    const origWrite = process.stdout.write;
-    process.stdout.write = () => true;
-    rl.question(message, (answer) => {
-      process.stdout.write = origWrite;
-      process.stdout.write('\n');
-      rl.close();
-      resolve(answer);
-    });
+    const wasRaw = process.stdin.isRaw;
+    if (process.stdin.isTTY) process.stdin.setRawMode(true);
+    process.stdout.write(message);
+    let password = '';
+    const onData = (char) => {
+      const c = char.toString();
+      if (c === '\n' || c === '\r') {
+        process.stdin.removeListener('data', onData);
+        if (process.stdin.isTTY) process.stdin.setRawMode(wasRaw ?? false);
+        process.stdout.write('\n');
+        resolve(password);
+      } else if (c === '\u007F' || c === '\b') {
+        if (password.length > 0) {
+          password = password.slice(0, -1);
+          process.stdout.write('\b \b');
+        }
+      } else if (c === '\u0003') {
+        if (process.stdin.isTTY) process.stdin.setRawMode(wasRaw ?? false);
+        process.exit();
+      } else {
+        password += c;
+        process.stdout.write('\u2022');
+      }
+    };
+    process.stdin.on('data', onData);
   });
 }
 
@@ -265,10 +277,10 @@ async function setPasswordCommand() {
 
   console.log('\n  Set a password to protect your credentials.\n');
 
-  const pw1 = await promptPassword('  Enter password: ');
+  const pw1 = await promptPassword('  Password: ');
   if (!pw1) { console.error('  Password cannot be empty.'); process.exit(1); }
 
-  const pw2 = await promptPassword('  Confirm password: ');
+  const pw2 = await promptPassword('  Repeat password: ');
   if (pw1 !== pw2) { console.error('  Passwords do not match.'); process.exit(1); }
 
   cfg.password = setPassword(pw1);
