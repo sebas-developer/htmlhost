@@ -19,7 +19,7 @@ function setPassword(password) {
 }
 
 function verifyPassword(password, stored) {
-  const hash = hashPassword(password, Buffer.from(stored.salt, 'hex'));
+  const hash = hashPassword(password, stored.salt);
   return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(stored.hash, 'hex'));
 }
 
