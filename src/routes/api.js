@@ -85,12 +85,29 @@ router.patch('/pastes/:id', requireApiKey, (req, res) => {
   const paste = pastes.getPaste(req.params.id);
   if (!paste) return res.status(404).json({ error: 'Not found' });
   if (paste.owner_key !== req.keyId) return res.status(403).json({ error: 'Forbidden' });
-  const { ttl } = req.body || {};
-  if (!ttl || !VALID_TTLS.includes(ttl)) {
-    return res.status(400).json({ error: `Invalid TTL. Options: ${VALID_TTLS.join(', ')}` });
+  const { ttl, html } = req.body || {};
+
+  if (ttl !== undefined) {
+    if (!VALID_TTLS.includes(ttl)) {
+      return res.status(400).json({ error: `Invalid TTL. Options: ${VALID_TTLS.join(', ')}` });
+    }
+    const result = pastes.updatePasteTTL(req.params.id, req.keyId, ttl);
+    return res.json({ id: result.id, expiresAt: new Date(result.expiresAt).toISOString(), ttl: result.ttl });
   }
-  const result = pastes.updatePasteTTL(req.params.id, req.keyId, ttl);
-  res.json({ id: result.id, expiresAt: new Date(result.expiresAt).toISOString(), ttl: result.ttl });
+
+  if (html !== undefined) {
+    if (typeof html !== 'string') {
+      return res.status(400).json({ error: 'html must be a string' });
+    }
+    try {
+      const result = pastes.updatePasteHTML(req.params.id, req.keyId, html);
+      return res.json({ id: result.id, size: result.size });
+    } catch (err) {
+      return res.status(400).json({ error: err.message });
+    }
+  }
+
+  return res.status(400).json({ error: 'Nothing to update. Send ttl or html.' });
 });
 
 router.post('/pastes/:id/password', requireApiKey, (req, res) => {

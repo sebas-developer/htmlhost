@@ -168,6 +168,7 @@ Commands:
   set-password             Set password to protect credentials display
   upload <file> [opts]     Upload HTML file
     --ttl <duration>       1h, 3h, 1d, 3d (default), 7d, 30d, indefinite
+  replace <id> <file>      Replace paste HTML with new file
   list                     List your pastes (size, status, password)
   info <id>                Get paste details
   expire <id> --ttl <dur>  Change paste duration
@@ -356,6 +357,23 @@ async function main() {
           console.log(`\n  Uploaded: ${BASE_URL}${res.data.url}`);
           console.log(`  ID: ${res.data.id}`);
           console.log(`  Expires: ${res.data.expiresAt || 'never'}\n`);
+        } else {
+          console.error('Error:', res.data.error);
+        }
+        break;
+      }
+      case 'replace': {
+        if (!args[1]) { console.error('Error: paste ID required'); process.exit(1); }
+        if (!args[2]) { console.error('Error: file path required'); process.exit(1); }
+        const id = args[1];
+        const filePath = path.resolve(args[2]);
+        if (!fs.existsSync(filePath)) { console.error('Error: file not found:', filePath); process.exit(1); }
+        const html = fs.readFileSync(filePath, 'utf8');
+        const res = await request('PATCH', `/api/pastes/${id}`, { body: { html } });
+        if (res.status === 200) {
+          console.log(`\n  Replaced: ${id}`);
+          console.log(`  Size: ${formatSize(res.data.size)}`);
+          console.log(`  URL: ${BASE_URL}/p/${id}\n`);
         } else {
           console.error('Error:', res.data.error);
         }

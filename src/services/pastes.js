@@ -86,6 +86,18 @@ function updatePasteTTL(id, ownerKeyId, ttl) {
   return { id, expiresAt: newExpires, ttl: formatExpiry(newExpires) };
 }
 
+function updatePasteHTML(id, ownerKeyId, html) {
+  if (!html || typeof html !== 'string') throw new Error('HTML content required');
+  if (Buffer.byteLength(html, 'utf8') > config.MAX_PASTE_SIZE) {
+    throw new Error(`Paste exceeds ${config.MAX_PASTE_SIZE / 1024 / 1024}MB limit`);
+  }
+  const db = getDb();
+  const paste = db.prepare('SELECT id FROM pastes WHERE id = ? AND owner_key = ?').get(id, ownerKeyId);
+  if (!paste) return null;
+  db.prepare('UPDATE pastes SET html = ? WHERE id = ?').run(html, id);
+  return { id, size: Buffer.byteLength(html, 'utf8') };
+}
+
 function setPastePassword(id, ownerKeyId, password) {
   const db = getDb();
   const paste = db.prepare('SELECT id FROM pastes WHERE id = ? AND owner_key = ?').get(id, ownerKeyId);
@@ -115,5 +127,5 @@ function verifyPastePassword(id, password) {
 
 module.exports = {
   createPaste, getPaste, listPastes, deletePaste, deleteExpired, getPasteCount,
-  updatePasteTTL, setPastePassword, removePastePassword, verifyPastePassword,
+  updatePasteTTL, updatePasteHTML, setPastePassword, removePastePassword, verifyPastePassword,
 };
