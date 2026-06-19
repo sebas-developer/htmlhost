@@ -16,7 +16,17 @@ router.get('/p/:id', (req, res) => {
   res.setHeader('Content-Type', 'text/html');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('Content-Security-Policy', "sandbox allow-forms; default-src 'none'; style-src 'unsafe-inline'; script-src 'none'");
+  res.setHeader('Content-Security-Policy', [
+    "default-src 'self'",
+    "script-src 'unsafe-inline' 'unsafe-eval' https:",
+    "style-src 'unsafe-inline' https:",
+    "img-src * data: blob:",
+    "font-src * data:",
+    "media-src * data: blob:",
+    "connect-src *",
+    "frame-src *",
+    "object-src 'none'",
+  ].join('; '));
   res.send(paste.html);
 });
 
