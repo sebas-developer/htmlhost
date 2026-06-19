@@ -94,12 +94,17 @@ Credentials live in `~/.htmlhost/config.json`:
 htmlhost setup                    # Create account + save credentials
 htmlhost show-credentials         # Show saved mnemonic + API key
 htmlhost upload <file> [--ttl]    # Upload HTML
-htmlhost list                     # List pastes
-htmlhost delete <id>              # Delete paste
+htmlhost replace <id> <file>      # Replace paste HTML with new file
+htmlhost list                     # List pastes (size, status, password)
 htmlhost info <id>                # Paste details
+htmlhost expire <id> --ttl <dur>  # Change paste duration
+htmlhost password <id> --set      # Set password on a paste
+htmlhost password <id> --remove   # Remove password from a paste
+htmlhost delete <id>              # Delete paste
 htmlhost keys                     # List API keys
 htmlhost create-key [label]       # New API key
 htmlhost delete-key <id>          # Delete key + pastes
+htmlhost update                   # Pull latest version and reinstall
 ```
 
 ### TTL Options
@@ -123,13 +128,19 @@ All endpoints require `Authorization: Bearer <api-key>`.
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `POST` | `/api/pastes` | Upload HTML (body: raw HTML, header: `X-TTL`) |
-| `GET` | `/api/pastes` | List your pastes |
-| `GET` | `/api/pastes/:id` | Get paste + HTML |
+| `GET` | `/api/pastes` | List your pastes (includes size, hasPassword) |
+| `GET` | `/api/pastes/:id` | Get paste + HTML + metadata |
+| `PATCH` | `/api/pastes/:id` | Update paste (body: `{ "ttl": "7d" }` or `{ "html": "..." }`) |
 | `DELETE` | `/api/pastes/:id` | Delete paste |
+| `POST` | `/api/pastes/:id/password` | Set password (body: `{ "password": "..." }`) |
+| `DELETE` | `/api/pastes/:id/password` | Remove password |
+| `POST` | `/api/pastes/:id/verify` | Verify password (rate-limited) |
 | `POST` | `/api/keys` | Create new key |
 | `GET` | `/api/keys` | List keys |
 | `DELETE` | `/api/keys/:id` | Delete key (cascades) |
 | `GET` | `/health` | Health check |
+
+Password-protected pastes show a password form at `/p/:id`. Cookie-based access after verification (24h).
 
 ---
 
