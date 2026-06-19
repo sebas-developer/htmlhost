@@ -12,7 +12,7 @@ function getSecret() {
   } catch {
     const secret = crypto.randomBytes(32).toString('hex');
     fs.mkdirSync(DATA_DIR, { recursive: true });
-    fs.writeFileSync(secretFile, secret);
+    fs.writeFileSync(secretFile, secret, { mode: 0o600 });
     return secret;
   }
 }
