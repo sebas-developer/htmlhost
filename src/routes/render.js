@@ -26,32 +26,8 @@ function parseCookies(req) {
   return cookies;
 }
 
-function escapeHtml(str) {
-  return String(str).replace(/[<>&"']/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' })[c]);
-}
-
-function passwordForm(pasteId, error) {
-  return `<!DOCTYPE html>
-<html><head><title>Password Required</title>
-<style>
-  body{font-family:system-ui;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;background:#0a0a0a;color:#ccc}
-  .box{text-align:center;padding:2rem;border:1px solid #333;border-radius:8px;background:#111}
-  input{padding:.5rem 1rem;border:1px solid #444;border-radius:4px;background:#1a1a1a;color:#fff;font-size:1rem;width:200px}
-  button{padding:.5rem 1.5rem;border:none;border-radius:4px;background:#2563eb;color:#fff;font-size:1rem;cursor:pointer;margin-top:.5rem}
-  button:hover{background:#1d4ed8}
-  .err{color:#ef4444;margin-bottom:.5rem}
-</style>
-</head><body>
-<div class="box">
-  <h2>This paste is password-protected</h2>
-  ${error ? '<p class="err">' + escapeHtml(error) + '</p>' : ''}
-  <form method="POST" action="/p/${escapeHtml(pasteId)}">
-    <input type="password" name="password" placeholder="Enter password" autofocus>
-    <br><br>
-    <button type="submit">Unlock</button>
-  </form>
-</div>
-</body></html>`;
+function renderPassword(res, status, pasteId, error) {
+  return res.status(status).render('password', { pasteId, error });
 }
 
 router.get('/p/:id', (req, res) => {
@@ -71,8 +47,7 @@ router.get('/p/:id', (req, res) => {
     const cookieVal = cookies[cookieName];
     const expected = signPasteCookie(paste.id, paste.password_hash);
     if (!cookieVal || cookieVal !== expected) {
-      res.setHeader('Content-Type', 'text/html');
-      return res.status(403).send(passwordForm(paste.id));
+      return renderPassword(res, 403, paste.id);
     }
   }
 
@@ -110,14 +85,12 @@ router.post('/p/:id', (req, res) => {
 
   const { password } = req.body || {};
   if (!password) {
-    res.setHeader('Content-Type', 'text/html');
-    return res.status(400).send(passwordForm(paste.id, 'Password required'));
+    return renderPassword(res, 400, paste.id, 'Password required');
   }
 
   const valid = pastes.verifyPastePassword(paste.id, password);
   if (!valid) {
-    res.setHeader('Content-Type', 'text/html');
-    return res.status(401).send(passwordForm(paste.id, 'Invalid password'));
+    return renderPassword(res, 401, paste.id, 'Invalid password');
   }
 
   const sig = signPasteCookie(paste.id, paste.password_hash);
