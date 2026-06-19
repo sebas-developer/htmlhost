@@ -29,24 +29,27 @@ function promptPassword(message = '  Password: ') {
     if (process.stdin.isTTY) process.stdin.setRawMode(true);
     process.stdout.write(message);
     let password = '';
-    const onData = (char) => {
-      const c = char.toString();
-      if (c === '\n' || c === '\r') {
-        process.stdin.removeListener('data', onData);
-        if (process.stdin.isTTY) process.stdin.setRawMode(wasRaw ?? false);
-        process.stdout.write('\n');
-        resolve(password);
-      } else if (c === '\u007F' || c === '\b') {
-        if (password.length > 0) {
-          password = password.slice(0, -1);
-          process.stdout.write('\b \b');
+    const onData = (buf) => {
+      for (const byte of buf) {
+        const c = String.fromCharCode(byte);
+        if (c === '\n' || c === '\r') {
+          process.stdin.removeListener('data', onData);
+          if (process.stdin.isTTY) process.stdin.setRawMode(wasRaw ?? false);
+          process.stdout.write('\n');
+          resolve(password);
+          return;
+        } else if (c === '\u007F' || c === '\b') {
+          if (password.length > 0) {
+            password = password.slice(0, -1);
+            process.stdout.write('\b \b');
+          }
+        } else if (c === '\u0003') {
+          if (process.stdin.isTTY) process.stdin.setRawMode(wasRaw ?? false);
+          process.exit();
+        } else {
+          password += c;
+          process.stdout.write('\u2022');
         }
-      } else if (c === '\u0003') {
-        if (process.stdin.isTTY) process.stdin.setRawMode(wasRaw ?? false);
-        process.exit();
-      } else {
-        password += c;
-        process.stdout.write('\u2022');
       }
     };
     process.stdin.on('data', onData);
