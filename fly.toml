@@ -9,6 +9,7 @@ kill_timeout = '5s'
 
 [env]
   PORT = '3000'
+  DATA_DIR = '/data'
 
 [http_service]
   internal_port = 3000

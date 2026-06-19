@@ -112,8 +112,9 @@ router.get('/keys', requireApiKey, (req, res) => {
 });
 
 router.delete('/keys/:id', requireApiKey, (req, res) => {
-  if (req.params.id !== req.keyId) {
-    return res.status(403).json({ error: 'Cannot delete other users\' keys' });
+  const allKeys = keys.listKeys();
+  if (allKeys.length <= 1) {
+    return res.status(400).json({ error: 'Cannot delete the last key' });
   }
   const result = keys.deleteKey(req.params.id);
   if (!result) return res.status(404).json({ error: 'Key not found' });

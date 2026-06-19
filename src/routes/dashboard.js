@@ -53,13 +53,12 @@ router.post('/login', loginLimiter, express.json(), (req, res) => {
 });
 
 router.post('/logout', (req, res) => {
-  req.session.destroy();
-  res.redirect('/login');
+  req.session.destroy(() => res.redirect('/login'));
 });
 
 router.get('/', requireSession, (req, res) => {
   const allPastes = pastes.listPastes(req.keyId);
-  const allKeys = keys.listKeysForOwner(req.keyId);
+  const allKeys = keys.listKeys();
   const cryptoParams = getBrowserDerivationParams();
   res.render('dashboard', {
     pastes: allPastes,
