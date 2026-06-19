@@ -149,6 +149,12 @@ function request(method, urlPath, { body, headers = {} } = {}) {
   });
 }
 
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + 'B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + 'KB';
+  return (bytes / 1024 / 1024).toFixed(1) + 'MB';
+}
+
 function printHelp() {
   console.log(`
 htmlhost — Disposable HTML Hosting CLI
@@ -162,9 +168,12 @@ Commands:
   set-password             Set password to protect credentials display
   upload <file> [opts]     Upload HTML file
     --ttl <duration>       1h, 3h, 1d, 3d (default), 7d, 30d, indefinite
-  list                     List your pastes
+  list                     List your pastes (size, status, password)
+  info <id>                Get paste details
+  expire <id> --ttl <dur>  Change paste duration
+  password <id> --set      Set password on a paste
+  password <id> --remove   Remove password from a paste
   delete <id>              Delete a paste
-  info <id>                Get paste info
   keys                     List API keys
   create-key [label]       Create new API key
   delete-key <id>          Delete an API key
@@ -359,8 +368,10 @@ async function main() {
         else {
           console.log(`\n  ${res.data.length} paste(s):\n`);
           res.data.forEach(p => {
-            const exp = p.expired ? ' (EXPIRED)' : p.ttl === 'never' ? '' : ` (${p.ttl})`;
-            console.log(`    ${p.id}${exp}  ${BASE_URL}${p.url}`);
+            const exp = p.expired ? ' EXPIRED' : p.ttl === 'never' ? 'never' : p.ttl;
+            const lock = p.hasPassword ? ' 🔒' : '';
+            const size = formatSize(p.size);
+            console.log(`    ${p.id}  ${size.padEnd(8)} ${exp.padEnd(9)}${lock}  ${BASE_URL}${p.url}`);
           });
           console.log('');
         }
@@ -372,14 +383,54 @@ async function main() {
         console.log(res.status === 200 ? '  Deleted.' : 'Error: ' + res.data.error);
         break;
       }
+      case 'expire': {
+        if (!args[1]) { console.error('Error: paste ID required'); process.exit(1); }
+        const ttlIdx = args.indexOf('--ttl');
+        const ttl = ttlIdx !== -1 ? args[ttlIdx + 1] : null;
+        if (!ttl) { console.error('Error: --ttl required (1h, 3h, 1d, 3d, 7d, 30d, indefinite)'); process.exit(1); }
+        const res = await request('PATCH', `/api/pastes/${args[1]}`, { body: { ttl } });
+        if (res.status === 200) {
+          console.log(`\n  Updated: ${args[1]}`);
+          console.log(`  Expires: ${res.data.expiresAt} (${res.data.ttl})\n`);
+        } else { console.error('Error:', res.data.error); }
+        break;
+      }
+      case 'password': {
+        if (!args[1]) { console.error('Error: paste ID required'); process.exit(1); }
+        const id = args[1];
+        if (args.includes('--set')) {
+          const pw1 = await promptPassword('  Password: ');
+          if (!pw1) { console.error('  Password cannot be empty.'); process.exit(1); }
+          const pw2 = await promptPassword('  Repeat: ');
+          if (pw1 !== pw2) { console.error('  Passwords do not match.'); process.exit(1); }
+          const res = await request('POST', `/api/pastes/${id}/password`, { body: { password: pw1 } });
+          if (res.status === 200) {
+            console.log(`\n  Paste ${id} is now password-protected.\n`);
+          } else { console.error('Error:', res.data.error); }
+        } else if (args.includes('--remove')) {
+          const res = await request('DELETE', `/api/pastes/${id}/password`);
+          if (res.status === 200) {
+            console.log(`\n  Password removed from ${id}.\n`);
+          } else { console.error('Error:', res.data.error); }
+        } else {
+          console.error('Error: --set or --remove required');
+          process.exit(1);
+        }
+        break;
+      }
       case 'info': {
         if (!args[1]) { console.error('Error: paste ID required'); process.exit(1); }
         const res = await request('GET', `/api/pastes/${args[1]}`);
         if (res.status === 200) {
-          console.log(`\n  ID:       ${res.data.id}`);
-          console.log(`  Created:  ${res.data.createdAt}`);
-          console.log(`  Expires:  ${res.data.expiresAt || 'never'}`);
-          console.log(`  URL:      ${BASE_URL}/p/${res.data.id}\n`);
+          const d = res.data;
+          const exp = d.expiresAt || 'never';
+          const remaining = d.expiresAt ? ` (${d.ttl} remaining)` : '';
+          console.log(`\n  ID:       ${d.id}`);
+          console.log(`  Created:  ${d.createdAt}`);
+          console.log(`  Expires:  ${exp}${remaining}`);
+          console.log(`  Size:     ${formatSize(d.size)}`);
+          console.log(`  Password: ${d.hasPassword ? 'protected' : 'none'}`);
+          console.log(`  URL:      ${BASE_URL}/p/${d.id}\n`);
         } else { console.error('Error:', res.data.error); }
         break;
       }

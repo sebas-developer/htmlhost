@@ -1,4 +1,5 @@
 const express = require('express');
+const crypto = require('crypto');
 const router = express.Router();
 const rateLimit = require('express-rate-limit');
 const { requireApiKey } = require('../auth');
@@ -11,6 +12,15 @@ const registerLimiter = rateLimit({
   message: { error: 'Too many attempts' },
   standardHeaders: true,
   legacyHeaders: false,
+});
+
+const verifyLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 10,
+  message: { error: 'Too many attempts' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.ip + ':' + req.params.id,
 });
 
 // --- Pastes ---
@@ -44,6 +54,8 @@ router.get('/pastes', requireApiKey, (req, res) => {
     expiresAt: p.expires_at ? new Date(p.expires_at).toISOString() : null,
     ttl: p.ttl,
     expired: p.expired,
+    hasPassword: p.hasPassword,
+    size: p.size,
   })));
 });
 
@@ -56,6 +68,8 @@ router.get('/pastes/:id', requireApiKey, (req, res) => {
     html: paste.html,
     createdAt: new Date(paste.created_at).toISOString(),
     expiresAt: paste.expires_at ? new Date(paste.expires_at).toISOString() : null,
+    hasPassword: paste.password_hash !== null,
+    size: Buffer.byteLength(paste.html, 'utf8'),
   });
 });
 
@@ -63,6 +77,65 @@ router.delete('/pastes/:id', requireApiKey, (req, res) => {
   const deleted = pastes.deletePaste(req.params.id, req.keyId);
   if (!deleted) return res.status(404).json({ error: 'Not found' });
   res.json({ deleted: true });
+});
+
+const VALID_TTLS = ['1h', '3h', '1d', '3d', '7d', '30d', 'indefinite'];
+
+router.patch('/pastes/:id', requireApiKey, (req, res) => {
+  const paste = pastes.getPaste(req.params.id);
+  if (!paste) return res.status(404).json({ error: 'Not found' });
+  if (paste.owner_key !== req.keyId) return res.status(403).json({ error: 'Forbidden' });
+  const { ttl } = req.body || {};
+  if (!ttl || !VALID_TTLS.includes(ttl)) {
+    return res.status(400).json({ error: `Invalid TTL. Options: ${VALID_TTLS.join(', ')}` });
+  }
+  const result = pastes.updatePasteTTL(req.params.id, req.keyId, ttl);
+  res.json({ id: result.id, expiresAt: new Date(result.expiresAt).toISOString(), ttl: result.ttl });
+});
+
+router.post('/pastes/:id/password', requireApiKey, (req, res) => {
+  const paste = pastes.getPaste(req.params.id);
+  if (!paste) return res.status(404).json({ error: 'Not found' });
+  if (paste.owner_key !== req.keyId) return res.status(403).json({ error: 'Forbidden' });
+  const { password } = req.body || {};
+  if (!password || typeof password !== 'string') {
+    return res.status(400).json({ error: 'password required' });
+  }
+  if (password.length > 1024) {
+    return res.status(400).json({ error: 'Password too long (max 1024 chars)' });
+  }
+  pastes.setPastePassword(req.params.id, req.keyId, password);
+  res.json({ protected: true });
+});
+
+router.delete('/pastes/:id/password', requireApiKey, (req, res) => {
+  const paste = pastes.getPaste(req.params.id);
+  if (!paste) return res.status(404).json({ error: 'Not found' });
+  if (paste.owner_key !== req.keyId) return res.status(403).json({ error: 'Forbidden' });
+  pastes.removePastePassword(req.params.id, req.keyId);
+  res.json({ protected: false });
+});
+
+router.post('/pastes/:id/verify', verifyLimiter, (req, res) => {
+  const paste = pastes.getPaste(req.params.id);
+  if (!paste) {
+    // Timing-constant: run dummy scrypt before returning
+    const dummySalt = crypto.randomBytes(16).toString('hex');
+    crypto.scryptSync('dummy', dummySalt, 64);
+    return res.status(404).json({ error: 'Not found' });
+  }
+  if (!paste.password_hash) {
+    return res.json({ valid: true, noPassword: true });
+  }
+  const { password } = req.body || {};
+  if (!password || typeof password !== 'string') {
+    return res.status(400).json({ error: 'password required' });
+  }
+  const valid = pastes.verifyPastePassword(req.params.id, password);
+  if (!valid) {
+    return res.status(401).json({ valid: false, error: 'Invalid password' });
+  }
+  res.json({ valid: true });
 });
 
 // --- Keys ---

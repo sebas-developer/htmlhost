@@ -30,12 +30,23 @@ function getDb() {
       created_at INTEGER NOT NULL,
       expires_at INTEGER,
       owner_key TEXT NOT NULL,
+      password_hash TEXT,
+      password_salt TEXT,
       FOREIGN KEY (owner_key) REFERENCES keys(id)
     );
 
     CREATE INDEX IF NOT EXISTS idx_pastes_expires ON pastes(expires_at);
     CREATE INDEX IF NOT EXISTS idx_pastes_owner ON pastes(owner_key);
   `);
+
+  // Migrate existing databases: add password columns if missing
+  const cols = db.prepare("PRAGMA table_info(pastes)").all().map(c => c.name);
+  if (!cols.includes('password_hash')) {
+    db.exec("ALTER TABLE pastes ADD COLUMN password_hash TEXT");
+  }
+  if (!cols.includes('password_salt')) {
+    db.exec("ALTER TABLE pastes ADD COLUMN password_salt TEXT");
+  }
 
   return db;
 }
