@@ -1,7 +1,10 @@
 const express = require('express');
 const crypto = require('crypto');
+const path = require('path');
+const mime = require('mime-types');
 const router = express.Router();
 const pastes = require('../services/pastes');
+const assets = require('../services/assets');
 const config = require('../config');
 
 router.use(express.urlencoded({ extended: false }));
@@ -97,6 +100,45 @@ router.post('/p/:id', (req, res) => {
   const cookieName = `paste_${paste.id}`;
   res.setHeader('Set-Cookie', `${cookieName}=${sig}; HttpOnly; SameSite=Lax; Path=/p/${paste.id}; Max-Age=86400`);
   res.redirect(`/p/${paste.id}`);
+});
+
+router.get('/a/:pasteId/*', (req, res) => {
+  const paste = pastes.getPaste(req.params.id || req.params.pasteId);
+  if (!paste) {
+    return res.status(404).send('Not found');
+  }
+
+  if (paste.password_hash) {
+    const cookies = parseCookies(req);
+    const cookieName = `paste_${paste.id}`;
+    const cookieVal = cookies[cookieName];
+    const expected = signPasteCookie(paste.id, paste.password_hash);
+    if (!cookieVal || cookieVal !== expected) {
+      return res.status(403).send('Forbidden');
+    }
+  }
+
+  const relPath = req.params[0];
+  const assetPath = assets.getAssetPath(paste.id, relPath);
+  if (!assetPath) {
+    return res.status(403).send('Forbidden');
+  }
+
+  const fs = require('fs');
+  try {
+    const stat = fs.statSync(assetPath);
+    if (!stat.isFile()) {
+      return res.status(404).send('Not found');
+    }
+  } catch {
+    return res.status(404).send('Not found');
+  }
+
+  const mimeType = mime.lookup(assetPath) || 'application/octet-stream';
+  res.setHeader('Content-Type', mimeType);
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.sendFile(assetPath);
 });
 
 module.exports = router;

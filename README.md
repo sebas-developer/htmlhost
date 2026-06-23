@@ -61,7 +61,7 @@ If you prefer not to use the skill:
 
 ```bash
 npm install -g https://github.com/sebas-developer/htmlhost
-htmlhost setup
+PASTE_ACCESS_KEY=<your-key> htmlhost setup   # key set on the server, see Deploy
 htmlhost upload index.html
 ```
 
@@ -82,6 +82,7 @@ Credentials live in `~/.htmlhost/config.json`:
 {
   "mnemonic": "word1 word2 ... word12",
   "apiKey": "ps_...",
+  "accessKey": "<server gate key>",
   "url": "https://html-host.fly.dev"
 }
 ```
@@ -151,24 +152,36 @@ Password-protected pastes show a password form at `/p/:id`. Cookie-based access 
 ```bash
 fly launch --copy-config --name your-app
 fly volumes create data --region iad
+fly secrets set ACCESS_KEY=$(openssl rand -hex 32)   # gate for account creation
 fly deploy
 ```
+
+Then, on the machine where you run the CLI, set the same key and register:
+```bash
+PASTE_ACCESS_KEY=<same-value> htmlhost setup
+```
+
+`ACCESS_KEY` gates `/api/auth/register` (fail-closed: registration refuses if unset). It's bootstrap-only — not persisted, not needed after setup.
 
 ### Docker
 
 ```bash
 docker build -t htmlhost .
-docker run -d -p 3000:3000 -v htmlhost-data:/data htmlhost
+docker run -d -p 3000:3000 -e ACCESS_KEY=<your-key> -v htmlhost-data:/data htmlhost
 ```
 
 ---
 
 ## How Auth Works
 
-No passwords. No OAuth. No recovery.
+Two layers: an **access key** gates account creation, a **mnemonic** derives your API key.
+
+**Access key** — shared secret set on the server (`ACCESS_KEY` env). Required to register a new account (`POST /api/auth/register` via `X-Access-Key` header). Fail-closed: registration refuses if the server has no `ACCESS_KEY`. Bootstrap-only — not needed after setup. Stored in your local config as `accessKey`; the CLI reads it automatically.
+
+**Mnemonic** — 12-word BIP39 phrase → API key:
 
 ```
-12-word mnemonic → PBKDF2 (100k iterations) → API key (ps_...)
+12-word mnemonic → PBKDF2 (600k iterations) → API key (ps_...)
 ```
 
 The server stores only `SHA-256(api_key)`. Your mnemonic never leaves your machine. Lose it = lose access. Back it up.

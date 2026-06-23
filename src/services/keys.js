@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const { getDb } = require('../db');
 const { generateMnemonic, deriveApiKey, hashKey } = require('../util/mnemonic');
+const assets = require('./assets');
 
 function createKey(label) {
   const db = getDb();
@@ -36,7 +37,11 @@ function deleteKey(id) {
   if (!key) return null;
 
   const deleteTransaction = db.transaction(() => {
-    const pasteCount = db.prepare('SELECT COUNT(*) as count FROM pastes WHERE owner_key = ?').get(id).count;
+    const pasteIds = db.prepare('SELECT id FROM pastes WHERE owner_key = ?').all(id).map(p => p.id);
+    for (const pasteId of pasteIds) {
+      assets.deletePasteAssets(pasteId);
+    }
+    const pasteCount = pasteIds.length;
     db.prepare('DELETE FROM pastes WHERE owner_key = ?').run(id);
     db.prepare('DELETE FROM keys WHERE id = ?').run(id);
     return { id, deletedPastes: pasteCount };

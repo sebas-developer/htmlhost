@@ -22,9 +22,9 @@ Check if CLI is installed and configured:
 which htmlhost 2>/dev/null && htmlhost list >/dev/null 2>&1 && echo "READY" || echo "NEEDS_SETUP"
 ```
 
-If needs setup, run:
+If needs setup, you need the **access key** (`ACCESS_KEY` set on the server). It's already stored in `~/.htmlhost/config.json` as `accessKey` on a configured machine, or provided via `PASTE_ACCESS_KEY` env:
 ```bash
-npm install -g https://github.com/sebas-developer/htmlhost && htmlhost setup
+npm install -g https://github.com/sebas-developer/htmlhost && PASTE_ACCESS_KEY=<key> htmlhost setup
 ```
 
 After setup, tell the user to back up their mnemonic (it's shown during `htmlhost setup`).
@@ -40,7 +40,7 @@ Skip setup. Just use CLI commands directly — they read `~/.htmlhost/config.jso
 When user asks to upload/host HTML:
 
 1. **Check setup:** `which htmlhost 2>/dev/null && htmlhost list >/dev/null 2>&1 && echo "READY" || echo "NEEDS_SETUP"`
-2. **If needs setup:** run `npm install -g https://github.com/sebas-developer/htmlhost && htmlhost setup`
+2. **If needs setup:** run `npm install -g https://github.com/sebas-developer/htmlhost && PASTE_ACCESS_KEY=<key> htmlhost setup` (access key required — see Deploy section in README)
 3. **Upload:** `htmlhost upload <file> --ttl <duration>`
 4. **Report URL:** the command outputs the full URL
 
@@ -81,6 +81,7 @@ Base URL: `https://html-host.fly.dev`
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
+| `POST` | `/api/auth/register` | Access key | Register first account (`X-Access-Key` header, open only when DB empty) |
 | `POST` | `/api/pastes` | Yes | Upload HTML (body: raw HTML, header: `X-TTL`) |
 | `GET` | `/api/pastes` | Yes | List your pastes (includes size, hasPassword) |
 | `GET` | `/api/pastes/:id` | Yes | Get paste + HTML + metadata |
@@ -99,7 +100,9 @@ Password-protected pastes show a password form at `/p/:id`. Cookie-based access 
 
 ## Auth
 
-Mnemonic-based (crypto-style). 12-word BIP39 phrase derives API key via PBKDF2.
+**Access key** — shared secret (`ACCESS_KEY` env on server). Gates `POST /api/auth/register` (account creation) via `X-Access-Key` header. Fail-closed if unset. Stored locally in config as `accessKey`; CLI reads it automatically on setup.
+
+**Mnemonic** — 12-word BIP39 phrase derives API key via PBKDF2 (600k iterations).
 Server stores only SHA-256 hash. Lose mnemonic = lose access. No recovery.
 
 ## Dashboard

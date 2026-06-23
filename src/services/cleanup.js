@@ -1,11 +1,18 @@
 const pastes = require('./pastes');
+const assets = require('./assets');
+const { getDb } = require('../db');
 
 let intervalId = null;
 
 function tick() {
+  const db = getDb();
+  const expired = db.prepare('SELECT id FROM pastes WHERE expires_at IS NOT NULL AND expires_at < ?').all(Date.now());
+  for (const p of expired) {
+    assets.deletePasteAssets(p.id);
+  }
   const deleted = pastes.deleteExpired();
   if (deleted > 0) {
-    console.log(`[cleanup] Deleted ${deleted} expired paste(s)`);
+    console.log(`[cleanup] Deleted ${deleted} expired paste(s) and their assets`);
   }
   return { deleted };
 }

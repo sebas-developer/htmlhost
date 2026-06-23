@@ -175,6 +175,10 @@ Commands:
   password <id> --set      Set password on a paste
   password <id> --remove   Remove password from a paste
   delete <id>              Delete a paste
+  asset <id> <file> [opts] Upload asset (image, audio, etc.)
+    --path <path>          Relative path in paste (e.g., images/photo.png)
+  assets <id>              List assets for a paste
+  delete-asset <id> <path> Delete an asset from a paste
   keys                     List API keys
   create-key [label]       Create new API key
   delete-key <id>          Delete an API key
@@ -195,14 +199,27 @@ async function setup() {
   const id = crypto.randomBytes(8).toString('hex');
   const hash = hashKey(apiKey);
 
+  // Access key gates registration. Env var takes precedence; falls back to
+  // config.accessKey so re-setup after a DB reset is zero-touch.
+  const accessKey = process.env.PASTE_ACCESS_KEY || loadConfig().accessKey;
+  if (!accessKey) {
+    console.error('  Error: PASTE_ACCESS_KEY required for setup.');
+    console.error('  Set it to the same ACCESS_KEY configured on the server,');
+    console.error('  or store it once in ~/.htmlhost/config.json as "accessKey".');
+    process.exit(1);
+  }
+
   // Register with server
-  const res = await request('POST', '/api/auth/register', { body: { id, hash, label: 'default' } });
+  const res = await request('POST', '/api/auth/register', {
+    body: { id, hash, label: 'default' },
+    headers: { 'X-Access-Key': accessKey },
+  });
   if (res.status !== 201) {
     console.error('  Error registering:', res.data.error || res.data);
     process.exit(1);
   }
 
-  // Save to ~/.htmlhost config
+  // Save to ~/.htmlhost config (no accessKey field — bootstrap-only)
   saveConfig({ mnemonic, apiKey, url: BASE_URL });
 
   console.log('  Account created!\n');
@@ -479,6 +496,75 @@ async function main() {
         if (res.status === 200) {
           console.log(`  Deleted. ${res.data.deletedPastes} paste(s) removed.`);
         } else { console.error('Error:', res.data.error); }
+        break;
+      }
+      case 'asset': {
+        if (!args[1]) { console.error('Error: paste ID required'); process.exit(1); }
+        if (!args[2]) { console.error('Error: file path required'); process.exit(1); }
+        const pasteId = args[1];
+        const filePath = path.resolve(args[2]);
+        if (!fs.existsSync(filePath)) { console.error('Error: file not found:', filePath); process.exit(1); }
+        const pathIdx = args.indexOf('--path');
+        const assetPath = pathIdx !== -1 ? args[pathIdx + 1] : path.basename(filePath);
+        const fileData = fs.readFileSync(filePath);
+        const FormData = require('form-data');
+        const https2 = require('https');
+        const http2 = require('http');
+        const form = new FormData();
+        form.append('file', fileData, { filename: path.basename(filePath) });
+        form.append('path', assetPath);
+        const url = new URL(`/api/pastes/${pasteId}/assets`, BASE_URL);
+        const mod = url.protocol === 'https:' ? https2 : http2;
+        const opts = {
+          hostname: url.hostname,
+          port: url.port,
+          path: url.pathname,
+          method: 'POST',
+          headers: {
+            ...form.getHeaders(),
+            ...(API_KEY ? { Authorization: `Bearer ${API_KEY}` } : {}),
+          },
+        };
+        const uploadRes = await new Promise((resolve, reject) => {
+          const req = mod.request(opts, (res) => {
+            let data = '';
+            res.on('data', (c) => data += c);
+            res.on('end', () => {
+              try { resolve({ status: res.statusCode, data: JSON.parse(data) }); }
+              catch { resolve({ status: res.statusCode, data }); }
+            });
+          });
+          req.on('error', reject);
+          form.pipe(req);
+        });
+        if (uploadRes.status === 201) {
+          console.log(`\n  Uploaded: ${BASE_URL}${uploadRes.data.url}`);
+          console.log(`  Size: ${formatSize(uploadRes.data.size)}`);
+          console.log(`  Type: ${uploadRes.data.mimeType}\n`);
+        } else {
+          console.error('Error:', uploadRes.data.error);
+        }
+        break;
+      }
+      case 'assets': {
+        if (!args[1]) { console.error('Error: paste ID required'); process.exit(1); }
+        const res = await request('GET', `/api/pastes/${args[1]}/assets`);
+        if (res.status !== 200) { console.error('Error:', res.data.error); break; }
+        if (res.data.length === 0) { console.log('\n  No assets.\n'); }
+        else {
+          console.log(`\n  ${res.data.length} asset(s):\n`);
+          res.data.forEach(a => {
+            console.log(`    ${a.filename}  ${formatSize(a.size).padEnd(8)} ${a.mimeType}  ${BASE_URL}${a.url}`);
+          });
+          console.log('');
+        }
+        break;
+      }
+      case 'delete-asset': {
+        if (!args[1]) { console.error('Error: paste ID required'); process.exit(1); }
+        if (!args[2]) { console.error('Error: asset path required'); process.exit(1); }
+        const res = await request('DELETE', `/api/pastes/${args[1]}/assets/${args[2]}`);
+        console.log(res.status === 200 ? '  Deleted.' : 'Error: ' + res.data.error);
         break;
       }
       default:

@@ -3,6 +3,7 @@ const { getDb } = require('../db');
 const { generateId } = require('../util/url');
 const { expiresAt, formatExpiry } = require('../util/ttl');
 const config = require('../config');
+const assets = require('./assets');
 
 function hashPastePassword(password, salt) {
   return crypto.scryptSync(password, salt, 64).toString('hex');
@@ -62,6 +63,7 @@ function listPastes(ownerKeyId) {
 
 function deletePaste(id, ownerKeyId) {
   const db = getDb();
+  assets.deletePasteAssets(id);
   const result = db.prepare('DELETE FROM pastes WHERE id = ? AND owner_key = ?').run(id, ownerKeyId);
   return result.changes > 0;
 }

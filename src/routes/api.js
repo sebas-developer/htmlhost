@@ -1,10 +1,16 @@
 const express = require('express');
 const crypto = require('crypto');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 const router = express.Router();
 const rateLimit = require('express-rate-limit');
+const { ipKeyGenerator } = rateLimit;
 const { requireApiKey } = require('../auth');
 const pastes = require('../services/pastes');
+const assets = require('../services/assets');
 const keys = require('../services/keys');
+const config = require('../config');
 
 const registerLimiter = rateLimit({
   windowMs: 60_000,
@@ -20,7 +26,31 @@ const verifyLimiter = rateLimit({
   message: { error: 'Too many attempts' },
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => req.ip + ':' + req.params.id,
+  keyGenerator: (req) => ipKeyGenerator(req) + ':' + req.params.id,
+});
+
+const assetUploadLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 5,
+  message: { error: 'Too many asset uploads' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const assetStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const tmpDir = path.join(config.ASSETS_DIR, '.tmp');
+    fs.mkdirSync(tmpDir, { recursive: true });
+    cb(null, tmpDir);
+  },
+  filename: (req, file, cb) => {
+    cb(null, file.originalname);
+  },
+});
+
+const upload = multer({
+  storage: assetStorage,
+  limits: { fileSize: config.MAX_ASSET_SIZE },
 });
 
 // --- Pastes ---
@@ -152,13 +182,75 @@ router.post('/pastes/:id/verify', verifyLimiter, (req, res) => {
   if (!valid) {
     return res.status(401).json({ valid: false, error: 'Invalid password' });
   }
+  if (req.session) {
+    if (!req.session.unlocked) req.session.unlocked = {};
+    req.session.unlocked[req.params.id] = true;
+  }
   res.json({ valid: true });
+});
+
+// --- Assets ---
+
+router.post('/pastes/:id/assets', requireApiKey, assetUploadLimiter, upload.single('file'), (req, res) => {
+  try {
+    const paste = pastes.getPaste(req.params.id);
+    if (!paste) return res.status(404).json({ error: 'Paste not found' });
+    if (paste.owner_key !== req.keyId) return res.status(403).json({ error: 'Forbidden' });
+    if (!req.file) return res.status(400).json({ error: 'No file provided' });
+
+    const filename = req.body.path || req.file.originalname;
+    const result = assets.createAsset(req.params.id, req.file, filename);
+    res.status(201).json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  } finally {
+    if (req.file) {
+      try { fs.unlinkSync(req.file.path); } catch {}
+    }
+  }
+});
+
+router.get('/pastes/:id/assets', requireApiKey, (req, res) => {
+  const paste = pastes.getPaste(req.params.id);
+  if (!paste) return res.status(404).json({ error: 'Not found' });
+  if (paste.owner_key !== req.keyId) return res.status(403).json({ error: 'Forbidden' });
+  const list = assets.listAssets(req.params.id);
+  res.json(list.map(a => ({
+    id: a.id,
+    filename: a.filename,
+    originalName: a.original_name,
+    mimeType: a.mime_type,
+    size: a.size,
+    url: `/a/${req.params.id}/${a.filename}`,
+    createdAt: new Date(a.created_at).toISOString(),
+  })));
+});
+
+router.delete('/pastes/:id/assets/:filename(*)', requireApiKey, (req, res) => {
+  const deleted = assets.deleteAsset(req.params.id, req.params.filename, req.keyId);
+  if (!deleted) return res.status(404).json({ error: 'Not found' });
+  res.json({ deleted: true });
 });
 
 // --- Keys ---
 
-// Bootstrap: register first key without auth (only when DB is empty)
+// Bootstrap: register first key without auth (only when DB is empty).
+// Gated by ACCESS_KEY env secret to close the bootstrap race (a rando
+// hitting /register before the owner runs setup). Fail-closed: no
+// ACCESS_KEY on the server = registration refused (no silent revert).
 router.post('/auth/register', registerLimiter, (req, res) => {
+  const accessKey = process.env.ACCESS_KEY;
+  if (!accessKey) {
+    return res.status(503).json({ error: 'ACCESS_KEY not configured' });
+  }
+  const provided = req.get('X-Access-Key');
+  // Length guard before timingSafeEqual — it throws on length mismatch.
+  const ok = provided && provided.length === accessKey.length &&
+    crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(accessKey));
+  if (!ok) {
+    return res.status(403).json({ error: 'Invalid access key' });
+  }
+
   const db = require('../db').getDb();
   const keyCount = db.prepare('SELECT COUNT(*) as count FROM keys').get().count;
   if (keyCount > 0) {

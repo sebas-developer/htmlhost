@@ -22,4 +22,8 @@ module.exports = {
   DATA_DIR,
   SESSION_SECRET: getSecret(),
   MAX_PASTE_SIZE: 1024 * 1024, // 1MB
+  MAX_ASSET_SIZE: 10 * 1024 * 1024, // 10MB
+  ASSETS_DIR: path.join(DATA_DIR, 'assets'),
+  MAX_ASSETS_PER_PASTE: 50,
+  MAX_ASSET_STORAGE_PER_PASTE: 50 * 1024 * 1024, // 50MB total per paste
 };

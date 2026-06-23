@@ -2,6 +2,7 @@ const express = require('express');
 const session = require('express-session');
 const helmet = require('helmet');
 const path = require('path');
+const fs = require('fs');
 const config = require('./config');
 const { getDb, close } = require('./db');
 const cleanup = require('./services/cleanup');
@@ -22,6 +23,9 @@ app.use(helmet({
 
 // Init DB
 getDb();
+
+// Ensure assets directory exists
+fs.mkdirSync(config.ASSETS_DIR, { recursive: true });
 
 // Resume safety: validate SQLite handle on every request.
 // After a Fly Machine resume (auto_stop_machines = 'suspend'), the volume

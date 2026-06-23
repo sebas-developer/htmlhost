@@ -37,6 +37,18 @@ function getDb() {
 
     CREATE INDEX IF NOT EXISTS idx_pastes_expires ON pastes(expires_at);
     CREATE INDEX IF NOT EXISTS idx_pastes_owner ON pastes(owner_key);
+
+    CREATE TABLE IF NOT EXISTS assets (
+      id TEXT PRIMARY KEY,
+      paste_id TEXT NOT NULL,
+      filename TEXT NOT NULL,
+      original_name TEXT NOT NULL,
+      mime_type TEXT NOT NULL,
+      size INTEGER NOT NULL,
+      created_at INTEGER NOT NULL,
+      FOREIGN KEY (paste_id) REFERENCES pastes(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_assets_paste ON assets(paste_id);
   `);
 
   // Migrate existing databases: add password columns if missing
