@@ -33,6 +33,13 @@ function renderPassword(res, status, pasteId, error) {
   return res.status(status).render('password', { pasteId, error });
 }
 
+const WATERMARK = `<style>.htmlhost-wm{position:fixed!important;right:12px!important;bottom:12px!important;z-index:2147483647!important;font:11px/1.4 system-ui,-apple-system,sans-serif!important;background:rgba(10,10,10,.72)!important;color:#ddd!important;padding:4px 8px!important;border-radius:6px!important;text-decoration:none!important;backdrop-filter:blur(4px)!important}.htmlhost-wm:hover{color:#fff!important}</style><a class="htmlhost-wm" href="https://github.com/sebas-developer/htmlhost" target="_blank" rel="noopener noreferrer">uploaded to html-host</a>`;
+
+function withWatermark(html) {
+  const m = html.search(/<\/body\s*>/i);
+  return m >= 0 ? html.slice(0, m) + WATERMARK + html.slice(m) : html + WATERMARK;
+}
+
 router.get('/p/:id', (req, res) => {
   const paste = pastes.getPaste(req.params.id);
   if (!paste) {
@@ -68,7 +75,7 @@ router.get('/p/:id', (req, res) => {
     "frame-src *",
     "object-src 'none'",
   ].join('; '));
-  res.send(paste.html);
+  res.send(withWatermark(paste.html));
 });
 
 router.post('/p/:id', (req, res) => {
