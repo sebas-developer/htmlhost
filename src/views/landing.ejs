@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <%- include('partials/head', { title: 'htmlhost — Disposable HTML hosting for AI agents' }) %>
+  <style>
+    .nav {
+      display: flex; align-items: center; gap: var(--space-3);
+      padding: var(--space-4) var(--space-5);
+      max-width: 1100px; margin: 0 auto;
+    }
+    .nav .brand { display: flex; align-items: center; gap: var(--space-2); margin-right: auto; }
+    .nav .brand-mark { width: 18px; height: 18px; background: var(--text); }
+    .nav .brand-name { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+    .nav .actions { display: flex; align-items: center; gap: var(--space-2); }
+
+    main { max-width: 1100px; margin: 0 auto; padding: 0 var(--space-5); }
+
+    .hero {
+      padding: var(--space-8) 0 var(--space-7);
+      max-width: 760px;
+    }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: var(--space-2);
+      padding: 4px 10px;
+      font-size: 11px; font-weight: 600;
+      color: var(--accent);
+      background: var(--accent-soft);
+      border: 1px solid var(--accent-soft);
+      letter-spacing: 0.06em; text-transform: uppercase;
+      margin-bottom: var(--space-5);
+    }
+    .eyebrow .dot { width: 6px; height: 6px; background: var(--accent); border-radius: 50%; }
+    h1.hero-title {
+      font-size: clamp(36px, 5.5vw, 60px);
+      font-weight: 700;
+      line-height: 1.05;
+      letter-spacing: -0.035em;
+      margin-bottom: var(--space-5);
+    }
+    h1.hero-title em {
+      font-style: normal;
+      color: var(--text-muted);
+    }
+    .hero-sub {
+      font-size: 18px; line-height: 1.55;
+      color: var(--text-muted);
+      max-width: 640px;
+      margin-bottom: var(--space-6);
+    }
+    .hero-cta { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+
+    .demo {
+      margin: var(--space-6) 0 var(--space-7);
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+    .demo-bar {
+      display: flex; align-items: center; gap: var(--space-2);
+      padding: var(--space-2) var(--space-3);
+      border-bottom: 1px solid var(--border);
+      font-size: 11px; color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+    .demo-bar .dot-r { width: 8px; height: 8px; border-radius: 50%; background: #ff5f57; }
+    .demo-bar .dot-y { width: 8px; height: 8px; border-radius: 50%; background: #febc2e; }
+    .demo-bar .dot-g { width: 8px; height: 8px; border-radius: 50%; background: #28c840; }
+    .demo-bar .label { margin-left: auto; }
+    .demo pre {
+      padding: var(--space-4);
+      font-size: 13px; line-height: 1.7;
+      color: var(--text);
+      overflow-x: auto;
+    }
+    .demo pre .c { color: var(--text-muted); }
+    .demo pre .k { color: var(--accent); }
+    .demo pre .o { color: var(--text-muted); }
+    .demo pre .v { color: #16a34a; }
+    [data-theme="dark"] .demo pre .v { color: #4ade80; }
+    .demo pre .arrow { color: var(--text-muted); }
+
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      margin-bottom: var(--space-7);
+    }
+    .feature {
+      background: var(--bg);
+      padding: var(--space-5);
+      display: flex; flex-direction: column; gap: var(--space-2);
+    }
+    .feature-icon {
+      width: 28px; height: 28px;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--accent);
+      margin-bottom: var(--space-2);
+    }
+    .feature-icon svg { width: 20px; height: 20px; }
+    .feature h3 {
+      font-size: 14px; font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+    .feature p {
+      font-size: 13px; line-height: 1.55;
+      color: var(--text-muted);
+    }
+
+    .pitch {
+      padding: var(--space-6) var(--space-5);
+      border: 1px solid var(--border);
+      background: var(--bg-elevated);
+      margin-bottom: var(--space-7);
+    }
+    .pitch-text {
+      font-size: 19px; line-height: 1.6;
+      letter-spacing: -0.01em;
+      max-width: 720px;
+    }
+    .pitch-text strong { color: var(--text); font-weight: 600; }
+    .pitch-text em { color: var(--text-muted); font-style: normal; }
+
+    .sketch {
+      padding: var(--space-7) 0 var(--space-8);
+      border-top: 1px solid var(--border);
+    }
+    .sketch h2 {
+      font-size: 24px; font-weight: 600;
+      letter-spacing: -0.02em;
+      margin-bottom: var(--space-2);
+    }
+    .sketch p.lead {
+      font-size: 14px; color: var(--text-muted);
+      max-width: 640px;
+      margin-bottom: var(--space-5);
+    }
+    .sketch .step-list {
+      display: grid; gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+    }
+    .step {
+      display: grid; grid-template-columns: 32px 1fr;
+      gap: var(--space-4);
+      padding: var(--space-4) var(--space-5);
+      background: var(--bg);
+    }
+    .step-num {
+      font-family: var(--font-mono);
+      font-size: 12px; font-weight: 600;
+      color: var(--text-subtle);
+      padding-top: 2px;
+    }
+    .step-body strong { display: block; font-weight: 600; font-size: 14px; margin-bottom: 2px; }
+    .step-body span { color: var(--text-muted); font-size: 13px; }
+
+    .cta-band {
+      display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-4);
+      justify-content: space-between;
+      padding: var(--space-6);
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      margin-bottom: var(--space-7);
+    }
+    .cta-band h3 {
+      font-size: 20px; font-weight: 600;
+      letter-spacing: -0.02em;
+      max-width: 460px;
+    }
+    .cta-band .actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+
+    footer {
+      border-top: 1px solid var(--border);
+      padding: var(--space-5) 0 var(--space-6);
+      max-width: 1100px; margin: 0 auto;
+      padding-left: var(--space-5); padding-right: var(--space-5);
+      display: flex; align-items: center; gap: var(--space-4);
+      font-size: 12px; color: var(--text-muted);
+    }
+    footer a:hover { color: var(--text); }
+    footer .links { display: flex; gap: var(--space-4); margin-right: auto; }
+
+    @media (max-width: 640px) {
+      .nav, main, footer { padding-left: var(--space-3); padding-right: var(--space-3); }
+      .hero { padding-top: var(--space-7); }
+      h1.hero-title { font-size: 36px; }
+      .hero-sub { font-size: 16px; }
+      .step { grid-template-columns: 1fr; gap: var(--space-2); }
+      footer { flex-wrap: wrap; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <a href="/" class="brand">
+      <div class="brand-mark"></div>
+      <div class="brand-name">htmlhost</div>
+    </a>
+    <div class="actions">
+      <a class="btn btn-sm" href="https://github.com/sebas-developer/htmlhost" target="_blank" rel="noopener noreferrer">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38v-1.34c-2.22.48-2.69-1.07-2.69-1.07-.36-.92-.89-1.16-.89-1.16-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.71 1.22 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.13 0 0 .67-.21 2.2.82a7.65 7.65 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.11.16 1.93.08 2.13.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.19c0 .21.15.46.55.38A8 8 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+        GitHub
+      </a>
+      <button class="icon-btn" onclick="toggleTheme()" aria-label="Toggle theme" data-theme-icon></button>
+      <a class="btn btn-sm" href="/login">Sign in</a>
+    </div>
+  </nav>
+
+  <main>
+    <section class="hero">
+      <div class="eyebrow">
+        <span class="dot"></span>
+        Built for agents
+      </div>
+      <h1 class="hero-title">
+        Disposable HTML hosting <em>for AI agents.</em>
+      </h1>
+      <p class="hero-sub">
+        Upload → random URL → self-destructs. A single CLI, a 12-word mnemonic,
+        zero dashboards to babysit. <strong>Give your agent one skill file and
+        it ships HTML to the web in one command.</strong>
+      </p>
+      <div class="hero-cta">
+        <a class="btn btn-primary btn-lg" href="https://github.com/sebas-developer/htmlhost#install-the-skill-agents" target="_blank" rel="noopener noreferrer">
+          Get the skill
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 8h10M9 4l4 4-4 4"/></svg>
+        </a>
+        <a class="btn btn-lg" href="/login">Sign in</a>
+      </div>
+
+      <div class="demo">
+        <div class="demo-bar">
+          <span class="dot-r"></span><span class="dot-y"></span><span class="dot-g"></span>
+          <span class="label">terminal</span>
+        </div>
+<pre><span class="c"># your agent, in one command</span>
+<span class="k">$</span> htmlhost upload landing-page.html <span class="k">--ttl</span> 7d
+<span class="v">  Uploaded: vcc6Q2Fb</span>
+<span class="v">  URL: https://html-host.fly.dev/p/vcc6Q2Fb</span>
+<span class="v">  Expires: 7d</span>
+
+<span class="c"># with an image — assets live under the paste</span>
+<span class="k">$</span> htmlhost asset vcc6Q2Fb ./hero.png <span class="k">--path</span> hero.png
+<span class="v">  Uploaded: https://html-host.fly.dev/a/vcc6Q2Fb/hero.png</span>
+<span class="v">  Size: 290.4KB   Type: image/png</span>
+
+<span class="c"># paste lives 7 days, then deletes itself. no cleanup.</span></pre>
+      </div>
+    </section>
+
+    <section class="pitch">
+      <p class="pitch-text">
+        The whole product is the loop: <strong>an agent generates HTML,
+        hosts it, and hands you a URL</strong> — without breaking flow. No
+        build step. No git. No deploy pipeline. <em>The page lives as long
+        as you tell it to, then it's gone.</em>
+      </p>
+    </section>
+
+    <section class="features">
+      <div class="feature">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 16V4M12 4l-4 4M12 4l4 4"/><path d="M4 14v4a2 2 0 002 2h12a2 2 0 002-2v-4"/></svg>
+        </div>
+        <h3>One-shot hosting</h3>
+        <p>One command, one URL. No accounts to click through, no dashboards to babysit, no deploy pipeline to wire up.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+        </div>
+        <h3>Ephemeral by default</h3>
+        <p>TTL from 1 hour to indefinite. Demos, previews, and throwaways self-destruct — no cleanup duty, no orphan pages.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4h16v16H4z"/><path d="M4 14l4-4 4 4 4-4 4 4"/></svg>
+        </div>
+        <h3>Assets, not just HTML</h3>
+        <p>Drop images, audio, fonts, video, CSS, JS, PDFs under a paste and reference them by absolute URL. A full static site, not a single file.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+        </div>
+        <h3>Mnemonic auth, no passwords</h3>
+        <p>One 12-word phrase derives the API key. Nothing to paste into a browser, nothing to leak in a screenshot. Server stores only a hash.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2a4 4 0 014 4v3H8V6a4 4 0 014-4z"/><rect x="4" y="9" width="16" height="13" rx="2"/><circle cx="12" cy="15" r="1.5"/></svg>
+        </div>
+        <h3>Agent-native skill</h3>
+        <p>A single <code>SKILL.md</code> teaches OpenCode, Claude Code, and Codex the full lifecycle — install, auth, upload, asset handling, the relative-path trap.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 12l3-3 3 3 5-5 4 4 3-3"/><path d="M3 21h18"/></svg>
+        </div>
+        <h3>Self-hostable</h3>
+        <p>Single Node service, SQLite on a volume, deploys to fly.io or Docker in minutes. Your data, your rules, your access key.</p>
+      </div>
+    </section>
+
+    <section class="sketch">
+      <h2>How it works</h2>
+      <p class="lead">Drop one skill file into your agent's skills directory. From there, the loop is a single conversation.</p>
+      <div class="step-list">
+        <div class="step">
+          <div class="step-num">01</div>
+          <div class="step-body">
+            <strong>Install the skill</strong>
+            <span>One curl to <code>~/.config/opencode/skills/</code>, <code>~/.claude/skills/</code>, or <code>~/.agents/skills/</code>.</span>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">02</div>
+          <div class="step-body">
+            <strong>Ask your agent to host something</strong>
+            <span>"Upload this HTML page" — the agent runs <code>htmlhost setup</code> on first call, generates a 12-word mnemonic, saves credentials to <code>~/.htmlhost/config.json</code>.</span>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">03</div>
+          <div class="step-body">
+            <strong>Get a URL</strong>
+            <span>The agent uploads, references assets by absolute URL, and reports the final paste URL back. Page lives as long as you told it to, then deletes itself.</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="cta-band">
+      <h3>Give your agent one skill file. It handles the rest.</h3>
+      <div class="actions">
+        <a class="btn btn-primary" href="https://github.com/sebas-developer/htmlhost#install-the-skill-agents" target="_blank" rel="noopener noreferrer">
+          Install the skill
+        </a>
+        <a class="btn" href="https://github.com/sebas-developer/htmlhost" target="_blank" rel="noopener noreferrer">View on GitHub</a>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="links">
+      <a href="https://github.com/sebas-developer/htmlhost" target="_blank" rel="noopener noreferrer">GitHub</a>
+      <a href="/login">Sign in</a>
+      <a href="<%= baseUrl %>/api/pastes" target="_blank" rel="noopener noreferrer">API</a>
+    </div>
+    <span>htmlhost · MIT</span>
+  </footer>
+
+  <%- include('partials/theme') %>
+</body>
+</html>
