@@ -92,9 +92,9 @@ function createAsset(pasteId, file, filename) {
   };
 }
 
-function deleteAsset(pasteId, filename, ownerKeyId) {
+function deleteAsset(pasteId, filename, accountId) {
   const db = getDb();
-  const paste = db.prepare('SELECT id FROM pastes WHERE id = ? AND owner_key = ?').get(pasteId, ownerKeyId);
+  const paste = db.prepare('SELECT id FROM pastes WHERE id = ? AND (account_id = ? OR is_public = 1)').get(pasteId, accountId);
   if (!paste) return false;
 
   const safeFilename = sanitizeFilename(filename);

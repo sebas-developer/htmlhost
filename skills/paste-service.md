@@ -19,54 +19,221 @@ config after first setup.
 
 ## Mental Model
 
-Two things, and only two:
+Three things, and only three:
 
-- **Paste** — the HTML page itself. Short ID, served at `https://html-host.fly.dev/p/<id>`. This is the URL you share.
-- **Asset** — a file (image, audio, font, …) uploaded **under** a paste. Has a path (e.g. `images/photo.png`), served at `https://html-host.fly.dev/a/<paste-id>/<path>`. Referenced from the paste's HTML by **absolute** URL.
+- **Paste** — the HTML page itself. Short ID, served at `https://<your-app>.fly.dev/p/<id>`. This is the URL you share.
+- **Asset** — a file (image, audio, font, …) uploaded **under** a paste. Has a path (e.g. `images/photo.png`), served at `https://<your-app>.fly.dev/a/<paste-id>/<path>`. Referenced from the paste's HTML by **absolute** URL.
+- **Account** — a group of keys sharing the same pastes. The initial `setup()` creates an account; `create-key` inherits the caller's account. All admin-scope keys in an account see all its pastes.
+
+`<your-app>.fly.dev` is the user's own self-hosted instance (see [Service Setup](#service-setup)). The CLI stores it in `~/.htmlhost/config.json` as `url` after first setup.
 
 An asset **must belong to a paste**. Upload the paste first, then drop assets
 under it. The asset is only useful if the paste references it.
+
+## Service Setup
+
+Three things need to be in place before any upload works:
+
+1. **htmlhost CLI** installed globally
+2. **htmlhost server** reachable at a known URL
+3. **Credentials** in `~/.htmlhost/config.json` (mnemonic + API key)
+
+Walk the user through this tree on the first request. Each step has a fast
+no-network local check.
+
+### Step 1 — Is the CLI installed?
+
+```bash
+command -v htmlhost >/dev/null 2>&1 && echo "CLI: OK" || echo "CLI: MISSING"
+```
+
+If missing, install globally:
+
+```bash
+npm install -g https://github.com/sebas-developer/htmlhost
+```
+
+### Step 2 — Is the server reachable?
+
+Read the configured URL (if any) and probe `/health`:
+
+```bash
+URL=$(node -e "try{console.log(require('fs').existsSync(require('path').join(require('os').homedir(),'.htmlhost','config.json'))?JSON.parse(require('fs').readFileSync(require('path').join(require('os').homedir(),'.htmlhost','config.json'),'utf8')).url||'':'')}catch{}")
+if [ -n "$URL" ] && curl -fsS --max-time 3 "$URL/health" >/dev/null 2>&1; then
+  echo "SERVER: OK ($URL)"
+else
+  echo "SERVER: NEEDS_BOOTSTRAP"
+fi
+```
+
+If the server isn't reachable, **ask the user**:
+> Do you have an htmlhost instance URL? (e.g. `https://htmlhost-jane.fly.dev`)
+>   • **Yes** — paste the URL; it'll be saved to config and used going forward.
+>   • **No**  — let's deploy one on Fly.io together (~5 min, free tier).
+
+If "no", run the **Fly.io bootstrap** below.
+
+#### Fly.io bootstrap (one-time, ~5 min)
+
+This deploys htmlhost to the user's own fly.io app. Each user gets their own
+private instance.
+
+**a. Install the fly CLI if missing:**
+
+```bash
+command -v fly >/dev/null 2>&1 || {
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    brew install flyctl
+  else
+    curl -L https://fly.io/install.sh | sh
+    export PATH="$HOME/.fly/bin:$PATH"
+  fi
+}
+```
+
+**b. Authenticate with fly.io:**
+
+```bash
+fly auth whoami >/dev/null 2>&1 || fly auth signup
+# (use `fly auth login` if the user already has an account)
+```
+
+**c. Clone + launch the app:**
+
+```bash
+git clone https://github.com/sebas-developer/htmlhost /tmp/htmlhost
+cd /tmp/htmlhost
+fly launch --copy-config --no-deploy
+# Pick a unique app name when prompted (e.g. `htmlhost-jane`).
+# That's the URL: https://htmlhost-jane.fly.dev
+```
+
+`--copy-config` reuses the bundled `fly.toml`. `--no-deploy` skips the
+auto-deploy so we can set the access key first.
+
+**d. Persistent volume for the SQLite DB:**
+
+```bash
+fly volumes create data --size 1 --region <closest-region>
+# Common regions: iad (Virginia), sjc (San Jose), fra (Frankfurt),
+#                 sin (Singapore), syd (Sydney), nrt (Tokyo)
+# Use the same region picked during `fly launch`.
+```
+
+**e. Set the registration access key** (a shared secret that gates account creation):
+
+```bash
+ACCESS_KEY=$(openssl rand -hex 32)
+fly secrets set ACCESS_KEY="$ACCESS_KEY"
+# Tell the user to save $ACCESS_KEY — they'll need it on every machine that registers.
+```
+
+**f. Deploy:**
+
+```bash
+fly deploy
+# Verify it came up:
+curl -fsS --max-time 10 https://<their-app>.fly.dev/health
+# → {"ok":true}
+```
+
+### Step 3 — Are credentials saved?
+
+```bash
+htmlhost show-credentials >/dev/null 2>&1 && echo "CREDS: OK" || echo "CREDS: NEEDS_SETUP"
+```
+
+If `NEEDS_SETUP`, register an account. The CLI needs both the server URL
+(`PASTE_URL`) and the registration access key (`PASTE_ACCESS_KEY`) on first
+run; both are saved to config so future commands work with no env vars:
+
+```bash
+PASTE_URL=https://<their-app>.fly.dev \
+PASTE_ACCESS_KEY="$ACCESS_KEY" \
+  htmlhost setup
+```
+
+Setup generates a 12-word mnemonic + API key and saves them to
+`~/.htmlhost/config.json` (mode `0600`). **Tell the user to back up the
+mnemonic** — it's the only way to recover the account. Lose it = lose access.
+
+## Key Scopes & Permissions
+
+Every key has a **scope** that controls what it can see and do:
+
+| Scope | List | Edit | Delete | Create Keys | Visibility Toggle |
+|-------|------|------|--------|-------------|-------------------|
+| `admin` | All account pastes | Any account paste | Any account paste | Yes | Own/account pastes |
+| `user` | Own pastes only | Own pastes only | Own pastes only | No | Own pastes only |
+| `team` | All **public** pastes | Public pastes | **Never** | No | **Never** |
+
+- `setup()` creates an **admin** key (first key, full access).
+- `create-key` defaults to **user** scope. Pass `--scope team` for team members.
+- Only **admin** keys can create or delete other keys.
+
+```bash
+htmlhost create-key temp-dev --scope user     # sees only own pastes
+htmlhost create-key collaborator --scope team  # sees public pastes only
+htmlhost create-key backup-admin --scope admin # full access
+```
+
+## Public vs Private Pastes
+
+Pastes are **private by default** — only keys in the same account can see them (via API).
+
+Make a paste **public** to let any authenticated key (including team-scope) fetch and edit it:
+
+```bash
+htmlhost public <id>     # visible + editable by all keys
+htmlhost private <id>    # back to account-only (default)
+```
+
+The rendered page at `/p/<id>` is always accessible via URL (like a secret link). "Public" means it appears in team-scope lists and any key can edit it via API. Only the owner or admin can change visibility or delete.
 
 ## Credential Management
 
 Credentials live in `~/.htmlhost/config.json`. **NEVER read this file directly** — the CLI handles all auth internally. Never pass credentials as arguments.
 
-### First-Time Setup
+### Reading local config (no network)
 
-Check if the CLI is installed and configured (no network call — just reads local config):
+Use `htmlhost show-credentials` to read saved credentials (CLI may prompt for
+the local config password if the user set one). Use `htmlhost list` /
+`htmlhost info <id>` for paste state. Do not `cat` or `jq` the config file.
 
-```bash
-which htmlhost 2>/dev/null && htmlhost show-credentials >/dev/null 2>&1 && echo "READY" || echo "NEEDS_SETUP"
-```
+### Re-setup on a new machine
 
-If `NEEDS_SETUP`, install + register. **An access key is required** — it's the
-`ACCESS_KEY` set on the server, gating account creation (fail-closed if unset).
-Pass it once via env, or it can be pre-stored as `accessKey` in the config:
+If `~/.htmlhost/config.json` is missing or the server's DB was reset:
 
 ```bash
-npm install -g https://github.com/sebas-developer/htmlhost
-PASTE_ACCESS_KEY=<key> htmlhost setup
+PASTE_URL=https://<their-app>.fly.dev \
+PASTE_ACCESS_KEY=<the-shared-secret-from-step-2e> \
+  htmlhost setup
 ```
 
-After setup, tell the user to back up their 12-word mnemonic (shown on screen).
-Lose it = lose access. No recovery.
+To avoid passing `PASTE_ACCESS_KEY` every time, save it once in the config
+as `accessKey`:
 
-### If Config Exists
-
-Skip setup. Use CLI commands directly — they read `~/.htmlhost/config.json`
-automatically.
+```bash
+node -e "
+const f=require('path').join(require('os').homedir(),'.htmlhost','config.json');
+const c=JSON.parse(require('fs').readFileSync(f,'utf8'));
+c.accessKey='<the-key>';
+require('fs').writeFileSync(f, JSON.stringify(c,null,2), {mode:0o600});
+"
+```
 
 ## Agent Workflow
 
 When the user asks to upload/host HTML, images, or other files:
 
-1. **Check setup:** `which htmlhost 2>/dev/null && htmlhost show-credentials >/dev/null 2>&1 && echo "READY" || echo "NEEDS_SETUP"`
-2. **If needs setup:** install + `PASTE_ACCESS_KEY=<key> htmlhost setup`
+1. **Run the Service Setup tree** above. If anything fails, fix it before continuing.
+2. **Check for existing paste** — if the user references a paste ID, use `htmlhost pull <id>` to download it into `.htmlhost/<slug>/` for editing
 3. **Use the standard project layout** under `.htmlhost/<slug>/` (see below) — write `index.html`, drop assets in `assets/`, let the workflow manage `.paste`
 4. **Upload the HTML paste first** (assets need a parent paste)
 5. **Upload each asset** under the paste ID, `--path` matching its location inside `assets/`
 6. **Reference assets in the HTML by absolute URL** (see "The Relative Path Trap" — this is the #1 footgun)
 7. **Report the paste URL** to the user (asset URLs are intermediate, not shared)
+8. **If sharing with collaborators** — use `htmlhost public <id>` to make it visible to team-scope keys
 
 ## Project Layout
 
@@ -90,7 +257,7 @@ to `.gitignore` unless you want to commit the source.
 
 **`assets/`** — directory tree mirrors the `--path` passed to `htmlhost asset`. `assets/images/photo.png` → `--path images/photo.png`. Drop the file in the right subfolder, done.
 
-**`.paste`** — single line, the paste ID. Read it to know which paste to update or delete. URL is deterministic: `https://html-host.fly.dev/p/<id>`.
+**`.paste`** — single line, the paste ID. Read it to know which paste to update or delete. URL is deterministic: `https://<your-app>.fly.dev/p/<id>`.
 
 ### Full Lifecycle
 
@@ -145,7 +312,7 @@ Default (no env var) is project-local `.htmlhost/`.
 ```bash
 htmlhost upload index.html --ttl 7d
 # → Uploaded: <id>
-# → URL: https://html-host.fly.dev/p/<id>
+# → URL: https://<your-app>.fly.dev/p/<id>
 ```
 
 Update in place (same URL, new content):
@@ -177,7 +344,7 @@ htmlhost asset aB3xY photo.png   # stored as "photo.png"
 
 The command prints the full URL — use that exact URL in the HTML:
 ```
-Uploaded: https://html-host.fly.dev/a/aB3xY/images/photo.png
+Uploaded: https://<your-app>.fly.dev/a/aB3xY/images/photo.png
 Size: 290.4KB
 Type: image/png
 ```
@@ -194,7 +361,7 @@ Example: `htmlhost delete-asset aB3xY images/photo.png`.
 ### Asset URL Pattern
 
 ```
-https://html-host.fly.dev/a/<paste-id>/<path>
+https://<your-app>.fly.dev/a/<paste-id>/<path>
 ```
 
 ### Supported File Types
@@ -215,7 +382,7 @@ Wrong:
 
 Right:
 ```html
-<img src="https://html-host.fly.dev/a/aB3xY/images/photo.png">
+<img src="https://<your-app>.fly.dev/a/aB3xY/images/photo.png">
 ```
 
 Use the full absolute URL the upload command printed. Same rule for CSS
@@ -228,10 +395,31 @@ Use the full absolute URL the upload command printed. Same rule for CSS
 htmlhost upload page.html --ttl 7d          # → Replaced: aB3xY
 # 2. Upload the image under it
 htmlhost asset aB3xY ./signature.png --path signature.png
-# → Uploaded: https://html-host.fly.dev/a/aB3xY/signature.png
+# → Uploaded: https://<your-app>.fly.dev/a/aB3xY/signature.png
 # 3. Reference it in page.html by absolute URL, then re-upload
 htmlhost replace aB3xY page.html
 ```
+
+### Pulling Source Code
+
+Download a paste's HTML + assets back into the standard `.htmlhost/<slug>/` layout for local editing:
+
+```bash
+htmlhost pull aB3xY --slug portfolio
+# → Created .htmlhost/portfolio/
+# → Downloaded index.html (12.4KB)
+# → Downloaded 3 asset(s)
+# → Paste ID saved to .htmlhost/portfolio/.paste
+```
+
+Then edit locally and re-upload:
+
+```bash
+$EDITOR .htmlhost/portfolio/index.html
+htmlhost replace aB3xY .htmlhost/portfolio/index.html
+```
+
+The slug defaults to the paste ID if `--slug` is omitted. Assets are downloaded from the public `/a/<id>/<path>` route and placed in `assets/` mirroring their `--path` structure.
 
 ## CLI Commands
 
@@ -240,18 +428,21 @@ htmlhost setup                    # Create account + save credentials (needs PAS
 htmlhost show-credentials         # Show saved mnemonic + API key
 htmlhost upload <file> [--ttl]    # Upload HTML
 htmlhost replace <id> <file>      # Replace paste HTML with new file
-htmlhost list                     # List pastes (size, status, 🔒 if protected)
-htmlhost info <id>                # Paste details (size, password status)
+htmlhost pull <id> [--slug <name>] # Download paste HTML + assets into .htmlhost/<slug>/
+htmlhost list                     # List pastes (scope-based: admin=all, user=own, team=public)
+htmlhost info <id>                # Paste details (size, password, public status)
 htmlhost expire <id> --ttl <dur>  # Change paste duration
+htmlhost public <id>              # Make paste public (visible to all keys)
+htmlhost private <id>             # Make paste private (account-only, default)
 htmlhost password <id> --set      # Set password on a paste
 htmlhost password <id> --remove   # Remove password from a paste
 htmlhost delete <id>              # Delete paste
 htmlhost asset <id> <file> [--path]  # Upload asset (image, audio, …) under a paste
 htmlhost assets <id>              # List assets for a paste
 htmlhost delete-asset <id> <path> # Delete an asset from a paste
-htmlhost keys                     # List API keys
-htmlhost create-key [label]       # New API key
-htmlhost delete-key <id>          # Delete key + pastes
+htmlhost keys                     # List API keys in your account (shows scope)
+htmlhost create-key [label] [--scope admin|user|team]  # New key (inherits your account)
+htmlhost delete-key <id>          # Delete key + its pastes
 htmlhost update                   # Pull latest version and reinstall
 ```
 
@@ -269,7 +460,7 @@ htmlhost update                   # Pull latest version and reinstall
 
 ## API Reference
 
-Base URL: `https://html-host.fly.dev`. All authed endpoints require `Authorization: Bearer <api-key>`.
+Base URL: `https://<your-app>.fly.dev` (your self-hosted instance). All authed endpoints require `Authorization: Bearer <api-key>`.
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
@@ -277,7 +468,7 @@ Base URL: `https://html-host.fly.dev`. All authed endpoints require `Authorizati
 | `POST` | `/api/pastes` | Yes | Upload HTML (body: raw HTML, header: `X-TTL`) |
 | `GET` | `/api/pastes` | Yes | List your pastes (size, hasPassword) |
 | `GET` | `/api/pastes/:id` | Yes | Get paste + HTML + metadata |
-| `PATCH` | `/api/pastes/:id` | Yes | Update TTL or HTML (`{ "ttl": "7d" }` or `{ "html": "..." }`) |
+| `PATCH` | `/api/pastes/:id` | Yes | Update TTL, HTML, or visibility (`{ "ttl": "7d" }`, `{ "html": "..." }`, or `{ "isPublic": true }`) |
 | `DELETE` | `/api/pastes/:id` | Yes | Delete paste |
 | `POST` | `/api/pastes/:id/password` | Yes | Set password (`{ "password": "..." }`) |
 | `DELETE` | `/api/pastes/:id/password` | Yes | Remove password |
@@ -290,7 +481,7 @@ Base URL: `https://html-host.fly.dev`. All authed endpoints require `Authorizati
 | `DELETE` | `/api/keys/:id` | Yes | Delete key (cascades) |
 | `GET` | `/health` | No | Health check |
 
-Password-protected pastes show a password form at `/p/:id`. Cookie-based access after verification (24h). Assets are publicly served at `/a/:id/<path>` (no auth — they're meant to be embedded).
+Password-protected pastes show a password form at `/p/:id`. Cookie-based access after verification (24h). Assets are publicly served at `/a/:id/<path>` (no auth — they're meant to be embedded). The paste list response includes `isPublic: boolean` for each paste. The keys response includes `scope: "admin" | "user" | "team"`.
 
 ## Auth — Two Layers
 
@@ -304,4 +495,4 @@ Server stores only `SHA-256(api_key)`. The mnemonic never leaves your machine. L
 
 ## Dashboard
 
-Visit `https://html-host.fly.dev`, log in with your mnemonic. Grid preview of all pastes, key management, API docs.
+Visit `https://<your-app>.fly.dev`, log in with your mnemonic. Grid preview of all pastes, key management, API docs.

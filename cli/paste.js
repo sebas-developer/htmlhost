@@ -87,6 +87,11 @@ function hashKey(apiKey) {
   return crypto.createHash('sha256').update(apiKey).digest('hex');
 }
 
+function deriveAccountId(mnemonic) {
+  const normalized = mnemonic.toLowerCase().trim().split(/\s+/).join(' ');
+  return crypto.createHash('sha256').update('acct:' + normalized).digest('hex').slice(0, 16);
+}
+
 // --- Config ---
 const CONFIG_DIR = path.join(require('os').homedir(), '.htmlhost');
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
@@ -169,9 +174,13 @@ Commands:
   upload <file> [opts]     Upload HTML file
     --ttl <duration>       1h, 3h, 1d, 3d (default), 7d, 30d, indefinite
   replace <id> <file>      Replace paste HTML with new file
-  list                     List your pastes (size, status, password)
+  pull <id> [opts]         Download paste HTML + assets into .htmlhost/<slug>/
+    --slug <name>          Project folder name (default: paste ID)
+  list                     List pastes (based on key scope)
   info <id>                Get paste details
   expire <id> --ttl <dur>  Change paste duration
+  public <id>              Make paste public (visible to all keys)
+  private <id>             Make paste private (default — only your account)
   password <id> --set      Set password on a paste
   password <id> --remove   Remove password from a paste
   delete <id>              Delete a paste
@@ -179,8 +188,9 @@ Commands:
     --path <path>          Relative path in paste (e.g., images/photo.png)
   assets <id>              List assets for a paste
   delete-asset <id> <path> Delete an asset from a paste
-  keys                     List API keys
-  create-key [label]       Create new API key
+  keys                     List API keys in your account
+  create-key [label] [opts]  Create new API key (inherits your account)
+    --scope <scope>        admin, user, team (default: user)
   delete-key <id>          Delete an API key
   update                   Pull latest version and reinstall
 
@@ -210,8 +220,9 @@ async function setup() {
   }
 
   // Register with server
+  const accountId = deriveAccountId(mnemonic);
   const res = await request('POST', '/api/auth/register', {
-    body: { id, hash, label: 'default' },
+    body: { id, hash, label: 'default', accountId, scope: 'admin' },
     headers: { 'X-Access-Key': accessKey },
   });
   if (res.status !== 201) {
@@ -319,6 +330,29 @@ async function setPasswordCommand() {
   console.log('\n  Password set. "show-credentials" will now require it.\n');
 }
 
+function downloadFile(url, destPath) {
+  return new Promise((resolve, reject) => {
+    const u = new URL(url);
+    const mod = u.protocol === 'https:' ? https : http;
+    fs.mkdirSync(path.dirname(destPath), { recursive: true });
+    const file = fs.createWriteStream(destPath);
+    mod.get(url, (res) => {
+      if (res.statusCode !== 200) {
+        file.close();
+        try { fs.unlinkSync(destPath); } catch {}
+        reject(new Error(`HTTP ${res.statusCode}`));
+        return;
+      }
+      res.pipe(file);
+      file.on('finish', () => { file.close(); resolve(); });
+    }).on('error', (err) => {
+      file.close();
+      try { fs.unlinkSync(destPath); } catch {}
+      reject(err);
+    });
+  });
+}
+
 async function main() {
   try {
     if (command === 'setup') {
@@ -405,8 +439,9 @@ async function main() {
           res.data.forEach(p => {
             const exp = p.expired ? ' EXPIRED' : p.ttl === 'never' ? 'never' : p.ttl;
             const lock = p.hasPassword ? ' 🔒' : '';
+            const pub = p.isPublic ? ' 🌐' : '';
             const size = formatSize(p.size);
-            console.log(`    ${p.id}  ${size.padEnd(8)} ${exp.padEnd(9)}${lock}  ${BASE_URL}${p.url}`);
+            console.log(`    ${p.id}  ${size.padEnd(8)} ${exp.padEnd(9)}${lock}${pub}  ${BASE_URL}${p.url}`);
           });
           console.log('');
         }
@@ -465,7 +500,66 @@ async function main() {
           console.log(`  Expires:  ${exp}${remaining}`);
           console.log(`  Size:     ${formatSize(d.size)}`);
           console.log(`  Password: ${d.hasPassword ? 'protected' : 'none'}`);
+          console.log(`  Public:   ${d.isPublic ? 'yes 🌐' : 'no'}`);
           console.log(`  URL:      ${BASE_URL}/p/${d.id}\n`);
+        } else { console.error('Error:', res.data.error); }
+        break;
+      }
+      case 'pull': {
+        if (!args[1]) { console.error('Error: paste ID required'); process.exit(1); }
+        const pasteId = args[1];
+        const slugIdx = args.indexOf('--slug');
+        const slug = slugIdx !== -1 ? args[slugIdx + 1] : pasteId;
+
+        const pasteRes = await request('GET', `/api/pastes/${pasteId}`);
+        if (pasteRes.status !== 200) {
+          console.error('Error:', pasteRes.data.error || 'Paste not found');
+          process.exit(1);
+        }
+
+        const projectDir = path.join('.htmlhost', slug);
+        const assetsDir = path.join(projectDir, 'assets');
+        fs.mkdirSync(assetsDir, { recursive: true });
+
+        fs.writeFileSync(path.join(projectDir, 'index.html'), pasteRes.data.html, 'utf8');
+        fs.writeFileSync(path.join(projectDir, '.paste'), pasteId, 'utf8');
+        console.log(`\n  Downloaded index.html (${formatSize(Buffer.byteLength(pasteRes.data.html, 'utf8'))})`);
+
+        const assetsRes = await request('GET', `/api/pastes/${pasteId}/assets`);
+        if (assetsRes.status === 200 && assetsRes.data.length > 0) {
+          for (const a of assetsRes.data) {
+            const assetUrl = `${BASE_URL}/a/${pasteId}/${a.filename}`;
+            const destPath = path.join(assetsDir, a.filename);
+            try {
+              await downloadFile(assetUrl, destPath);
+              console.log(`  Downloaded ${a.filename} (${formatSize(a.size)})`);
+            } catch (err) {
+              console.error(`  Failed to download ${a.filename}: ${err.message}`);
+            }
+          }
+          console.log(`\n  ${assetsRes.data.length} asset(s) pulled.\n`);
+        } else {
+          console.log('\n  No assets.\n');
+        }
+
+        console.log(`  Project:  .htmlhost/${slug}/`);
+        console.log(`  Paste ID: ${pasteId}`);
+        console.log(`  Edit and run: htmlhost replace ${pasteId} .htmlhost/${slug}/index.html\n`);
+        break;
+      }
+      case 'public': {
+        if (!args[1]) { console.error('Error: paste ID required'); process.exit(1); }
+        const res = await request('PATCH', `/api/pastes/${args[1]}`, { body: { isPublic: true } });
+        if (res.status === 200) {
+          console.log(`\n  Paste ${args[1]} is now public. 🌐\n`);
+        } else { console.error('Error:', res.data.error); }
+        break;
+      }
+      case 'private': {
+        if (!args[1]) { console.error('Error: paste ID required'); process.exit(1); }
+        const res = await request('PATCH', `/api/pastes/${args[1]}`, { body: { isPublic: false } });
+        if (res.status === 200) {
+          console.log(`\n  Paste ${args[1]} is now private.\n`);
         } else { console.error('Error:', res.data.error); }
         break;
       }
@@ -475,15 +569,19 @@ async function main() {
         if (res.data.length === 0) { console.log('\n  No keys.\n'); }
         else {
           console.log(`\n  ${res.data.length} key(s):\n`);
-          res.data.forEach(k => console.log(`    ${k.id}  ${k.label || '(unnamed)'}  ${k.createdAt}`));
+          res.data.forEach(k => console.log(`    ${k.id}  ${(k.scope||'admin').padEnd(6)}  ${k.label || '(unnamed)'}  ${k.createdAt}`));
           console.log('');
         }
         break;
       }
       case 'create-key': {
-        const res = await request('POST', '/api/keys', { body: { label: args[1] || 'default' } });
+        const scopeIdx = args.indexOf('--scope');
+        const scope = scopeIdx !== -1 ? args[scopeIdx + 1] : 'user';
+        const labelArg = args[1] && !args[1].startsWith('--') ? args[1] : 'default';
+        const res = await request('POST', '/api/keys', { body: { label: labelArg, scope } });
         if (res.status === 201) {
           console.log('\n  Key created!\n');
+          console.log(`  Scope:    ${res.data.scope || scope}`);
           console.log(`  Mnemonic: ${res.data.mnemonic}`);
           console.log(`  API Key:  ${res.data.apiKey}`);
           console.log('\n  SAVE THESE NOW.\n');

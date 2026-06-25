@@ -3,37 +3,40 @@ const { getDb } = require('../db');
 const { generateMnemonic, deriveApiKey, hashKey } = require('../util/mnemonic');
 const assets = require('./assets');
 
-function createKey(label) {
+function createKey(label, accountId, scope) {
   const db = getDb();
   const mnemonic = generateMnemonic();
   const apiKey = deriveApiKey(mnemonic);
   const id = crypto.randomBytes(8).toString('hex');
   const hash = hashKey(apiKey);
 
-  db.prepare('INSERT INTO keys (id, hash, label, created_at) VALUES (?, ?, ?, ?)')
-    .run(id, hash, label || null, Date.now());
+  db.prepare('INSERT INTO keys (id, hash, label, created_at, account_id, scope) VALUES (?, ?, ?, ?, ?, ?)')
+    .run(id, hash, label || null, Date.now(), accountId || id, scope || 'user');
 
   return { id, mnemonic, apiKey };
 }
 
 function findByHash(apiKeyHash) {
   const db = getDb();
-  return db.prepare('SELECT id, label, created_at FROM keys WHERE hash = ?').get(apiKeyHash);
+  return db.prepare('SELECT id, label, created_at, account_id, scope FROM keys WHERE hash = ?').get(apiKeyHash);
 }
 
 function findById(id) {
   const db = getDb();
-  return db.prepare('SELECT id, hash, label, created_at FROM keys WHERE id = ?').get(id);
+  return db.prepare('SELECT id, hash, label, created_at, account_id, scope FROM keys WHERE id = ?').get(id);
 }
 
-function listKeys() {
+function listKeys(accountId) {
   const db = getDb();
-  return db.prepare('SELECT id, label, created_at FROM keys ORDER BY created_at DESC').all();
+  if (accountId) {
+    return db.prepare('SELECT id, label, created_at, account_id, scope FROM keys WHERE account_id = ? ORDER BY created_at DESC').all(accountId);
+  }
+  return db.prepare('SELECT id, label, created_at, account_id, scope FROM keys ORDER BY created_at DESC').all();
 }
 
 function deleteKey(id) {
   const db = getDb();
-  const key = db.prepare('SELECT id FROM keys WHERE id = ?').get(id);
+  const key = db.prepare('SELECT id, account_id FROM keys WHERE id = ?').get(id);
   if (!key) return null;
 
   const deleteTransaction = db.transaction(() => {

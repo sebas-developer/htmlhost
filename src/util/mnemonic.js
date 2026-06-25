@@ -89,6 +89,11 @@ function hashKey(apiKey) {
   return crypto.createHash('sha256').update(apiKey).digest('hex');
 }
 
+function deriveAccountId(mnemonic) {
+  const normalized = mnemonic.toLowerCase().trim().split(/\s+/).join(' ');
+  return crypto.createHash('sha256').update('acct:' + normalized).digest('hex').slice(0, 16);
+}
+
 function verifyMnemonic(mnemonic, storedHash) {
   try {
     const apiKey = deriveApiKey(mnemonic);
@@ -116,6 +121,7 @@ module.exports = {
   deriveKey,
   deriveApiKey,
   hashKey,
+  deriveAccountId,
   verifyMnemonic,
   getBrowserDerivationParams,
 };

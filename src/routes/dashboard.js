@@ -61,8 +61,8 @@ router.get('/', (req, res) => {
   if (req.session && req.session.keyId) {
     const key = keys.findById(req.session.keyId);
     if (key) {
-      const allPastes = pastes.listPastes(key.id);
-      const allKeys = keys.listKeys();
+      const allPastes = pastes.listPastes(key.id, key.account_id, key.scope);
+      const allKeys = keys.listKeys(key.account_id);
       const cryptoParams = getBrowserDerivationParams();
       return res.render('dashboard', {
         pastes: allPastes,

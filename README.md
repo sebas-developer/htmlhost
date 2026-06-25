@@ -8,7 +8,7 @@ Upload → random URL → self-destructs. Agent-native, zero-config, mnemonic-au
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A520-339933?logo=node.js&logoColor=white)](https://nodejs.org)
-[![Live](https://img.shields.io/badge/live-html--host.fly.dev-success)](https://html-host.fly.dev)
+[![Self-host](https://img.shields.io/badge/self--host-fly.io-5161ff?logo=fly.io&logoColor=white)](#self-host-on-flyio)
 
 </div>
 
@@ -20,6 +20,9 @@ players, full static sites. **No accounts to click through, no dashboards to
  babysit, no deploy pipelines.** Just `htmlhost upload`, get a link, share it.
 The page lives as long as you tell it to, then deletes itself.
 
+**Self-host on Fly.io in 5 minutes** — your data, your rules, your domain.
+See [Self-host on Fly.io](#self-host-on-flyio) below.
+
 > Built for the loop where an agent **generates HTML → hosts it → hands you a
 > URL** without breaking flow. That's the whole product.
 
@@ -29,8 +32,10 @@ The page lives as long as you tell it to, then deletes itself.
 - **Ephemeral by default.** TTL from `1h` to `indefinite`. Demos, previews, and throwaways self-destruct — no cleanup duty.
 - **Assets, not just HTML.** Drop images, audio, fonts, video, CSS, JS, PDFs under a paste and reference them by absolute URL. A full static site, not a single file.
 - **Mnemonic auth, no passwords.** One 12-word phrase derives the API key. Nothing to paste into a browser, nothing to leak in a screenshot.
-- **Agent-native skill.** A single `SKILL.md` teaches OpenCode, Claude Code, and Codex the full lifecycle — install, auth, upload, asset handling, the relative-path trap — so the agent does the right thing on the first try.
-- **Self-hostable.** Single binary-ish Node service, SQLite on a volume, deploys to fly.io or Docker in minutes. Your data, your rules.
+- **Multi-key accounts.** One `setup()` creates an admin key. Create scoped sub-keys (`--scope user`, `--scope team`) that share the account. Admin sees all, user sees own, team sees public.
+- **Public & private.** Pastes are private by default. `htmlhost public <id>` makes them visible and editable by any key (team collaboration). Pull source code back with `htmlhost pull <id>`.
+- **Agent-native skill.** A single `SKILL.md` teaches OpenCode, Claude Code, and Codex the full lifecycle — install, auth, upload, asset handling, pull, the relative-path trap — so the agent does the right thing on the first try.
+- **Self-hostable.** Single binary-ish Node service, SQLite on a volume, deploys to fly.io or Docker in minutes. Your data, your rules, your domain.
 
 ---
 
@@ -70,32 +75,133 @@ including first-run setup — and reports the URL back.
 
 ---
 
-## Live Instance
+## Self-host on Fly.io
 
-**https://html-host.fly.dev**
+The fastest path. ~5 minutes, no credit card for the free tier.
 
-- **Dashboard** — log in with your mnemonic for a grid preview of all pastes, key management, and API docs.
-- **API** — `https://html-host.fly.dev/api/pastes`
-- **Example paste** — https://html-host.fly.dev/p/WOyBK6
+### 0. Install the fly.io CLI
+
+```bash
+# macOS
+brew install flyctl
+
+# Linux
+curl -L https://fly.io/install.sh | sh
+
+# Windows (PowerShell)
+pwsh -c "iwr https://fly.io/install.ps1 -useb | iex"
+```
+
+Then sign up (or log in if you have an account):
+
+```bash
+fly auth signup    # or: fly auth login
+```
+
+### 1. Launch the app
+
+```bash
+git clone https://github.com/sebas-developer/htmlhost
+cd htmlhost
+fly launch --copy-config --no-deploy
+# Pick a globally-unique app name when prompted, e.g. `htmlhost-jane`.
+# That's your URL: https://htmlhost-jane.fly.dev
+```
+
+`--copy-config` reuses the bundled `fly.toml`. `--no-deploy` skips the
+auto-deploy so we can set the access key first.
+
+### 2. Create a persistent volume
+
+```bash
+fly volumes create data --size 1 --region <closest-region>
+# Common regions: iad (Virginia), sjc (San Jose), fra (Frankfurt), sin (Singapore), syd (Sydney)
+# Use the same region you picked during `fly launch`.
+```
+
+### 3. Set the registration access key
+
+The server gates `POST /api/auth/register` behind a shared secret. Generate
+one and **save it somewhere safe** — you'll need it on every machine that
+registers:
+
+```bash
+ACCESS_KEY=$(openssl rand -hex 32)
+echo "$ACCESS_KEY" > ~/.htmlhost-access-key   # for your future self
+fly secrets set ACCESS_KEY="$ACCESS_KEY"
+```
+
+### 4. Deploy
+
+```bash
+fly deploy
+# Wait ~30s. Verify it came up:
+curl -fsS https://<your-app>.fly.dev/health
+# → {"ok":true}
+```
+
+### 5. Install the CLI and register
+
+```bash
+npm install -g https://github.com/sebas-developer/htmlhost
+PASTE_URL=https://<your-app>.fly.dev \
+PASTE_ACCESS_KEY=$(cat ~/.htmlhost-access-key) \
+  htmlhost setup
+```
+
+`htmlhost setup` generates a 12-word mnemonic, derives your API key, and
+saves both to `~/.htmlhost/config.json`. **Back up the mnemonic** — it's
+the only way to recover the account.
+
+### 6. Ship a page
+
+```bash
+htmlhost upload index.html
+# → Uploaded: vcc6Q2Fb
+# → URL: https://<your-app>.fly.dev/p/vcc6Q2Fb
+```
+
+Done. Future uploads don't need the access key — it's bootstrap-only.
+
+### Subsequent machines
+
+The same machine can re-setup if the DB is reset. Other machines just
+need the access key once:
+
+```bash
+PASTE_URL=https://<your-app>.fly.dev \
+PASTE_ACCESS_KEY=<the-key> \
+  htmlhost setup
+```
+
+To avoid the env var every time, store the access key locally (one-time):
+
+```bash
+# Add to ~/.htmlhost/config.json:
+{ "accessKey": "<the-key>", ... }
+```
 
 ---
 
 ## Quick Start (manual, no skill)
 
+Assumes you've already [deployed your own instance](#self-host-on-flyio).
+
 ```bash
 npm install -g https://github.com/sebas-developer/htmlhost
-PASTE_ACCESS_KEY=<your-key> htmlhost setup   # key gates registration — see Deploy
+PASTE_URL=https://<your-app>.fly.dev \
+PASTE_ACCESS_KEY=<your-key> htmlhost setup   # key gates registration
 htmlhost upload index.html
 # → Uploaded: vcc6Q2Fb
-# → URL: https://html-host.fly.dev/p/vcc6Q2Fb
+# → URL: https://<your-app>.fly.dev/p/vcc6Q2Fb
 ```
 
 HTML + an image in one flow:
 
 ```bash
-htmlhost upload page.html --ttl 7d               # page first
-htmlhost asset vcc6Q2Fb ./hero.png --path hero.png   # asset under it
-# → Uploaded: https://html-host.fly.dev/a/vcc6Q2Fb/hero.png
+htmlhost upload page.html --ttl 7d                    # page first
+htmlhost asset vcc6Q2Fb ./hero.png --path hero.png    # asset under it
+# → Uploaded: https://<your-app>.fly.dev/a/vcc6Q2Fb/hero.png
 ```
 
 > **The one footgun:** assets live at `/a/<id>/...`, pastes at `/p/<id>/...`.
@@ -108,18 +214,19 @@ htmlhost asset vcc6Q2Fb ./hero.png --path hero.png   # asset under it
 
 The skill teaches your agent to:
 
-1. Check if the CLI is installed and configured (no network call)
-2. If not → install globally + run `htmlhost setup` (generates a 12-word mnemonic + API key, saved to config)
-3. Scaffold a project under `.htmlhost/<slug>/` — `index.html`, `assets/`, and a `.paste` file holding the ID
-4. Upload the paste first, then each asset with `--path` mirroring its place in `assets/`
-5. Reference assets by absolute URL and report the final paste URL back to you
+1. Check if the CLI is installed (no network call)
+2. Check if an htmlhost instance is reachable — if not, walk the user through [self-hosting on Fly.io](#self-host-on-flyio) or use a URL they provide
+3. Run `htmlhost setup` with `PASTE_URL` and `PASTE_ACCESS_KEY` (generates a 12-word mnemonic + API key, saved to config)
+4. Scaffold a project under `.htmlhost/<slug>/` — `index.html`, `assets/`, and a `.paste` file holding the ID
+5. Upload the paste first, then each asset with `--path` mirroring its place in `assets/`
+6. Reference assets by absolute URL and report the final paste URL back to you
 
 Credentials live in `~/.htmlhost/config.json` (mode `0600`):
 ```json
 {
   "mnemonic": "word1 word2 ... word12",
   "apiKey": "ps_...",
-  "url": "https://html-host.fly.dev"
+  "url": "https://<your-app>.fly.dev"
 }
 ```
 
@@ -132,8 +239,11 @@ htmlhost setup                       # Create account + save credentials (needs 
 htmlhost show-credentials            # Show saved mnemonic + API key
 htmlhost upload <file> [--ttl]       # Upload HTML
 htmlhost replace <id> <file>         # Replace paste HTML (same URL)
-htmlhost list                        # List pastes (size, status, 🔒 if protected)
+htmlhost pull <id> [--slug <name>]   # Download paste + assets to .htmlhost/<slug>/
+htmlhost list                        # List pastes (scope-based)
 htmlhost info <id>                   # Paste details
+htmlhost public <id>                 # Make paste public (visible to all keys)
+htmlhost private <id>                # Make paste private (default)
 htmlhost expire <id> --ttl <dur>     # Change paste duration
 htmlhost password <id> --set         # Password-protect a paste
 htmlhost password <id> --remove      # Remove password
@@ -141,8 +251,8 @@ htmlhost delete <id>                 # Delete paste
 htmlhost asset <id> <file> [--path]  # Upload asset (image, audio, font, …) under a paste
 htmlhost assets <id>                 # List assets for a paste
 htmlhost delete-asset <id> <path>    # Delete an asset
-htmlhost keys                        # List API keys
-htmlhost create-key [label]          # New API key
+htmlhost keys                        # List API keys (shows scope)
+htmlhost create-key [label] [--scope admin|user|team]  # New scoped key
 htmlhost delete-key <id>             # Delete key (cascades to its pastes)
 htmlhost update                      # Pull latest + reinstall
 ```
@@ -163,7 +273,7 @@ htmlhost update                      # Pull latest + reinstall
 
 ## API
 
-Base URL: `https://html-host.fly.dev`. All authed endpoints require `Authorization: Bearer <api-key>`.
+Base URL: `https://<your-app>.fly.dev` (your self-hosted instance). All authed endpoints require `Authorization: Bearer <api-key>`.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -190,29 +300,22 @@ Password-protected pastes show a password form at `/p/:id`; cookie access after 
 
 ## Deploy Your Own
 
-### fly.io
-
-```bash
-fly launch --copy-config --name your-app
-fly volumes create data --region iad
-fly secrets set ACCESS_KEY=$(openssl rand -hex 32)   # gate for account creation
-fly deploy
-```
-
-Then register once from any machine with the same key:
-```bash
-PASTE_ACCESS_KEY=<same-value> htmlhost setup
-```
-
-`ACCESS_KEY` gates `POST /api/auth/register` (fail-closed: registration refuses
-if unset). Bootstrap-only — not persisted, not needed after setup.
+For Fly.io, see the [full walkthrough above](#self-host-on-flyio) — it's the
+recommended path.
 
 ### Docker
 
 ```bash
 docker build -t htmlhost .
-docker run -d -p 3000:3000 -e ACCESS_KEY=<your-key> -v htmlhost-data:/data htmlhost
+docker run -d -p 3000:3000 \
+  -e ACCESS_KEY=<your-key> \
+  -e DATA_DIR=/data \
+  -v htmlhost-data:/data \
+  htmlhost
 ```
+
+`ACCESS_KEY` gates `POST /api/auth/register` (fail-closed: registration refuses
+if unset). Bootstrap-only — not persisted, not needed after setup.
 
 ---
 

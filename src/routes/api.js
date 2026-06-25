@@ -11,6 +11,26 @@ const pastes = require('../services/pastes');
 const assets = require('../services/assets');
 const keys = require('../services/keys');
 const config = require('../config');
+const { formatExpiry } = require('../util/ttl');
+
+// Permission gates: scope-aware
+// admin: full account access | user: own pastes only | team: public pastes only (read+edit, no delete)
+const canEdit = (paste, req) => {
+  if (req.keyScope === 'admin') return paste.account_id === req.accountId;
+  if (req.keyScope === 'user') return paste.owner_key === req.keyId;
+  if (req.keyScope === 'team') return !!paste.is_public;
+  return false;
+};
+const canDelete = (paste, req) => {
+  if (req.keyScope === 'admin') return paste.account_id === req.accountId;
+  if (req.keyScope === 'user') return paste.owner_key === req.keyId;
+  return false; // team scope cannot delete
+};
+const canManage = (paste, req) => {
+  if (req.keyScope === 'admin') return paste.account_id === req.accountId;
+  if (req.keyScope === 'user') return paste.owner_key === req.keyId;
+  return false; // visibility toggle = owner only
+};
 
 const registerLimiter = rateLimit({
   windowMs: 60_000,
@@ -62,7 +82,7 @@ router.post('/pastes', requireApiKey, (req, res) => {
       return res.status(400).json({ error: 'Body must be raw HTML' });
     }
     const ttl = req.headers['x-ttl'] || '3d';
-    const result = pastes.createPaste({ html, ttl, ownerKeyId: req.keyId });
+    const result = pastes.createPaste({ html, ttl, ownerKeyId: req.keyId, accountId: req.accountId });
     res.status(201).json({
       id: result.id,
       url: `/p/${result.id}`,
@@ -76,7 +96,7 @@ router.post('/pastes', requireApiKey, (req, res) => {
 });
 
 router.get('/pastes', requireApiKey, (req, res) => {
-  const list = pastes.listPastes(req.keyId);
+  const list = pastes.listPastes(req.keyId, req.accountId, req.keyScope);
   res.json(list.map(p => ({
     id: p.id,
     url: `/p/${p.id}`,
@@ -85,6 +105,7 @@ router.get('/pastes', requireApiKey, (req, res) => {
     ttl: p.ttl,
     expired: p.expired,
     hasPassword: p.hasPassword,
+    isPublic: !!p.is_public,
     size: p.size,
   })));
 });
@@ -92,19 +113,24 @@ router.get('/pastes', requireApiKey, (req, res) => {
 router.get('/pastes/:id', requireApiKey, (req, res) => {
   const paste = pastes.getPaste(req.params.id);
   if (!paste) return res.status(404).json({ error: 'Not found' });
-  if (paste.owner_key !== req.keyId) return res.status(403).json({ error: 'Forbidden' });
+  if (!canEdit(paste, req)) return res.status(403).json({ error: 'Forbidden' });
   res.json({
     id: paste.id,
     html: paste.html,
     createdAt: new Date(paste.created_at).toISOString(),
     expiresAt: paste.expires_at ? new Date(paste.expires_at).toISOString() : null,
+    ttl: formatExpiry(paste.expires_at),
     hasPassword: paste.password_hash !== null,
+    isPublic: !!paste.is_public,
     size: Buffer.byteLength(paste.html, 'utf8'),
   });
 });
 
 router.delete('/pastes/:id', requireApiKey, (req, res) => {
-  const deleted = pastes.deletePaste(req.params.id, req.keyId);
+  const paste = pastes.getPaste(req.params.id);
+  if (!paste) return res.status(404).json({ error: 'Not found' });
+  if (!canDelete(paste, req)) return res.status(403).json({ error: 'Forbidden' });
+  const deleted = pastes.deletePaste(req.params.id, req.accountId);
   if (!deleted) return res.status(404).json({ error: 'Not found' });
   res.json({ deleted: true });
 });
@@ -114,14 +140,14 @@ const VALID_TTLS = ['1h', '3h', '1d', '3d', '7d', '30d', 'indefinite'];
 router.patch('/pastes/:id', requireApiKey, (req, res) => {
   const paste = pastes.getPaste(req.params.id);
   if (!paste) return res.status(404).json({ error: 'Not found' });
-  if (paste.owner_key !== req.keyId) return res.status(403).json({ error: 'Forbidden' });
-  const { ttl, html } = req.body || {};
+  if (!canEdit(paste, req)) return res.status(403).json({ error: 'Forbidden' });
+  const { ttl, html, isPublic } = req.body || {};
 
   if (ttl !== undefined) {
     if (!VALID_TTLS.includes(ttl)) {
       return res.status(400).json({ error: `Invalid TTL. Options: ${VALID_TTLS.join(', ')}` });
     }
-    const result = pastes.updatePasteTTL(req.params.id, req.keyId, ttl);
+    const result = pastes.updatePasteTTL(req.params.id, req.accountId, req.keyId, ttl);
     return res.json({ id: result.id, expiresAt: new Date(result.expiresAt).toISOString(), ttl: result.ttl });
   }
 
@@ -130,20 +156,28 @@ router.patch('/pastes/:id', requireApiKey, (req, res) => {
       return res.status(400).json({ error: 'html must be a string' });
     }
     try {
-      const result = pastes.updatePasteHTML(req.params.id, req.keyId, html);
+      const result = pastes.updatePasteHTML(req.params.id, req.accountId, req.keyId, html);
       return res.json({ id: result.id, size: result.size });
     } catch (err) {
       return res.status(400).json({ error: err.message });
     }
   }
 
-  return res.status(400).json({ error: 'Nothing to update. Send ttl or html.' });
+  if (isPublic !== undefined) {
+    // Visibility toggle: owner/admin only (public editors can't change visibility)
+    if (!canManage(paste, req)) return res.status(403).json({ error: 'Only the owner can change visibility' });
+    const result = pastes.setPasteVisibility(req.params.id, req.accountId, isPublic);
+    if (!result) return res.status(404).json({ error: 'Not found' });
+    return res.json({ id: result.id, isPublic: result.isPublic });
+  }
+
+  return res.status(400).json({ error: 'Nothing to update. Send ttl, html, or isPublic.' });
 });
 
 router.post('/pastes/:id/password', requireApiKey, (req, res) => {
   const paste = pastes.getPaste(req.params.id);
   if (!paste) return res.status(404).json({ error: 'Not found' });
-  if (paste.owner_key !== req.keyId) return res.status(403).json({ error: 'Forbidden' });
+  if (!canEdit(paste, req)) return res.status(403).json({ error: 'Forbidden' });
   const { password } = req.body || {};
   if (!password || typeof password !== 'string') {
     return res.status(400).json({ error: 'password required' });
@@ -151,15 +185,15 @@ router.post('/pastes/:id/password', requireApiKey, (req, res) => {
   if (password.length > 1024) {
     return res.status(400).json({ error: 'Password too long (max 1024 chars)' });
   }
-  pastes.setPastePassword(req.params.id, req.keyId, password);
+  pastes.setPastePassword(req.params.id, req.accountId, password);
   res.json({ protected: true });
 });
 
 router.delete('/pastes/:id/password', requireApiKey, (req, res) => {
   const paste = pastes.getPaste(req.params.id);
   if (!paste) return res.status(404).json({ error: 'Not found' });
-  if (paste.owner_key !== req.keyId) return res.status(403).json({ error: 'Forbidden' });
-  pastes.removePastePassword(req.params.id, req.keyId);
+  if (!canEdit(paste, req)) return res.status(403).json({ error: 'Forbidden' });
+  pastes.removePastePassword(req.params.id, req.accountId);
   res.json({ protected: false });
 });
 
@@ -195,7 +229,7 @@ router.post('/pastes/:id/assets', requireApiKey, assetUploadLimiter, upload.sing
   try {
     const paste = pastes.getPaste(req.params.id);
     if (!paste) return res.status(404).json({ error: 'Paste not found' });
-    if (paste.owner_key !== req.keyId) return res.status(403).json({ error: 'Forbidden' });
+    if (!canEdit(paste, req)) return res.status(403).json({ error: 'Forbidden' });
     if (!req.file) return res.status(400).json({ error: 'No file provided' });
 
     const filename = req.body.path || req.file.originalname;
@@ -213,7 +247,7 @@ router.post('/pastes/:id/assets', requireApiKey, assetUploadLimiter, upload.sing
 router.get('/pastes/:id/assets', requireApiKey, (req, res) => {
   const paste = pastes.getPaste(req.params.id);
   if (!paste) return res.status(404).json({ error: 'Not found' });
-  if (paste.owner_key !== req.keyId) return res.status(403).json({ error: 'Forbidden' });
+  if (!canEdit(paste, req)) return res.status(403).json({ error: 'Forbidden' });
   const list = assets.listAssets(req.params.id);
   res.json(list.map(a => ({
     id: a.id,
@@ -227,7 +261,7 @@ router.get('/pastes/:id/assets', requireApiKey, (req, res) => {
 });
 
 router.delete('/pastes/:id/assets/:filename(*)', requireApiKey, (req, res) => {
-  const deleted = assets.deleteAsset(req.params.id, req.params.filename, req.keyId);
+  const deleted = assets.deleteAsset(req.params.id, req.params.filename, req.accountId);
   if (!deleted) return res.status(404).json({ error: 'Not found' });
   res.json({ deleted: true });
 });
@@ -257,7 +291,7 @@ router.post('/auth/register', registerLimiter, (req, res) => {
     return res.status(403).json({ error: 'Registration closed' });
   }
 
-  const { hash, label, id } = req.body || {};
+  const { hash, label, id, accountId, scope } = req.body || {};
   if (!hash || !id) {
     return res.status(400).json({ error: 'hash and id required' });
   }
@@ -265,36 +299,46 @@ router.post('/auth/register', registerLimiter, (req, res) => {
   if (existing) {
     return res.status(409).json({ error: 'Key already registered' });
   }
-  db.prepare('INSERT INTO keys (id, hash, label, created_at) VALUES (?, ?, ?, ?)')
-    .run(id, hash, label || null, Date.now());
+  db.prepare('INSERT INTO keys (id, hash, label, created_at, account_id, scope) VALUES (?, ?, ?, ?, ?, ?)')
+    .run(id, hash, label || null, Date.now(), accountId || id, scope || 'admin');
   res.status(201).json({ success: true });
 });
 
 router.post('/keys', requireApiKey, (req, res) => {
-  const { label } = req.body || {};
+  if (req.keyScope !== 'admin') {
+    return res.status(403).json({ error: 'Only admin-scope keys can create new keys' });
+  }
+  const { label, scope } = req.body || {};
   if (label && label.length > 64) {
     return res.status(400).json({ error: 'Label too long (max 64 chars)' });
   }
-  const result = keys.createKey(label);
+  const validScopes = ['admin', 'user', 'team'];
+  const keyScope = validScopes.includes(scope) ? scope : 'user';
+  const result = keys.createKey(label, req.accountId, keyScope);
   res.status(201).json({
     id: result.id,
     mnemonic: result.mnemonic,
     apiKey: result.apiKey,
+    scope: keyScope,
     warning: 'Save your mnemonic phrase and API key. The mnemonic is shown only once.',
   });
 });
 
 router.get('/keys', requireApiKey, (req, res) => {
-  const list = keys.listKeys();
+  const list = keys.listKeys(req.accountId);
   res.json(list.map(k => ({
     id: k.id,
     label: k.label,
+    scope: k.scope || 'admin',
     createdAt: new Date(k.created_at).toISOString(),
   })));
 });
 
 router.delete('/keys/:id', requireApiKey, (req, res) => {
-  const allKeys = keys.listKeys();
+  if (req.keyScope !== 'admin') {
+    return res.status(403).json({ error: 'Only admin-scope keys can delete keys' });
+  }
+  const allKeys = keys.listKeys(req.accountId);
   if (allKeys.length <= 1) {
     return res.status(400).json({ error: 'Cannot delete the last key' });
   }
