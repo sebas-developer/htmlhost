@@ -64,7 +64,23 @@
     }
     .pill-danger { color: var(--danger); border-color: var(--danger); background: var(--danger-soft); }
     .dot { width: 6px; height: 6px; background: currentColor; }
-    .paste-actions { display: flex; gap: var(--space-2); }
+    .paste-actions { display: flex; gap: var(--space-2); align-items: center; }
+
+    .vis-select {
+      font-size: 11px; font-weight: 500;
+      padding: 3px 8px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8' fill='none' stroke='%23888' stroke-width='1.2'%3E%3Cpath d='M1 3l3 3 3-3'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 5px center;
+      padding-right: 18px;
+    }
+    .vis-select:hover { border-color: var(--border-strong); }
+    .vis-select option { font-size: 12px; }
 
     .empty {
       padding: var(--space-7) var(--space-5);
@@ -245,6 +261,10 @@
                   </div>
                   <div class="paste-actions">
                     <button class="btn btn-sm" onclick="copyUrl('<%= p.id %>')">Copy URL</button>
+                    <select class="vis-select" id="vis-<%= p.id %>" onchange="onVisChange('<%= p.id %>', this)">
+                      <option value="false" <%= !p.isPublic ? 'selected' : '' %>>&nbsp;Private</option>
+                      <option value="true" <%= p.isPublic ? 'selected' : '' %>>&nbsp;Public</option>
+                    </select>
                     <button class="btn btn-sm btn-danger" onclick="deletePaste('<%= p.id %>')">Delete</button>
                   </div>
                 </div>
@@ -437,6 +457,17 @@ PASTE_API_KEY=ps_... node cli/paste.js upload index.html --ttl 7d</code></pre>
     </div>
   </div>
 
+  <div class="modal-overlay" id="visConfirmModal">
+    <div class="modal">
+      <div class="modal-title" id="visConfirmTitle">Change Visibility</div>
+      <div class="modal-desc" id="visConfirmText"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn" onclick="cancelVisChange()">Cancel</button>
+        <button type="button" class="btn btn-primary" id="visConfirmBtn" onclick="confirmVisChange()">Confirm</button>
+      </div>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 
   <%- include('partials/theme') %>
@@ -561,6 +592,50 @@ PASTE_API_KEY=ps_... node cli/paste.js upload index.html --ttl 7d</code></pre>
       await fetch('/api/pastes/' + id, { method: 'DELETE' });
       document.getElementById('paste-' + id)?.remove();
       showToast('Deleted');
+    }
+
+    let _pendingVis = null;
+    function onVisChange(pasteId, select) {
+      const newValue = select.value === 'true';
+      _pendingVis = { pasteId, newValue, select, prev: select.value === 'true' ? 'false' : 'true' };
+      const prevVal = newValue ? 'false' : 'true';
+      select.value = prevVal;
+      document.getElementById('visConfirmTitle').textContent = newValue ? 'Make Public?' : 'Make Private?';
+      document.getElementById('visConfirmText').textContent = newValue
+        ? 'Anyone with an API key will be able to view and edit this paste.'
+        : 'Only keys in your account will be able to see this paste.';
+      document.getElementById('visConfirmBtn').textContent = newValue ? 'Make Public' : 'Make Private';
+      document.getElementById('visConfirmModal').classList.add('active');
+    }
+    function cancelVisChange() {
+      _pendingVis = null;
+      hideModal('visConfirmModal');
+    }
+    async function confirmVisChange() {
+      if (!_pendingVis) return;
+      const { pasteId, newValue, select } = _pendingVis;
+      const btn = document.getElementById('visConfirmBtn');
+      btn.disabled = true;
+      try {
+        const res = await fetch('/api/pastes/' + pasteId, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ isPublic: newValue })
+        });
+        if (res.ok) {
+          select.value = String(newValue);
+          hideModal('visConfirmModal');
+          showToast(newValue ? 'Paste is now public' : 'Paste is now private');
+          _pendingVis = null;
+        } else {
+          const data = await res.json();
+          showToast('Error: ' + (data.error || 'failed'));
+          hideModal('visConfirmModal');
+          _pendingVis = null;
+        }
+      } finally {
+        btn.disabled = false;
+      }
     }
 
     async function doCreateKey() {
