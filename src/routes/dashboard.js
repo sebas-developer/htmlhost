@@ -68,6 +68,7 @@ router.get('/', (req, res) => {
         pastes: allPastes,
         keys: allKeys,
         keyLabel: key.label,
+        currentKeyId: key.id,
         cryptoParams,
         baseUrl: req.protocol + '://' + req.get('host'),
       });

@@ -77,7 +77,7 @@
 
     .keys-list { border: 1px solid var(--border); }
     .keys-list .row {
-      display: grid; grid-template-columns: 1fr auto auto;
+      display: grid; grid-template-columns: 1fr auto auto auto;
       align-items: center; gap: var(--space-4);
       padding: var(--space-3) var(--space-4);
       border-bottom: 1px solid var(--border);
@@ -89,9 +89,19 @@
       font-size: 11px; font-weight: 600; color: var(--text-muted);
       text-transform: uppercase; letter-spacing: 0.06em;
     }
-    .keys-list .label-cell { font-weight: 500; }
+    .keys-list .label-cell { font-weight: 500; display: flex; align-items: center; gap: var(--space-2); }
     .keys-list .label-cell .sub { color: var(--text-muted); font-weight: 400; font-size: 12px; }
+    .keys-list .scope-cell { font-size: 11px; }
     .keys-list .date { color: var(--text-muted); font-variant-numeric: tabular-nums; font-size: 12px; }
+    .scope-badge {
+      display: inline-flex; align-items: center;
+      padding: 2px 8px; font-size: 10px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.04em;
+      border: 1px solid var(--border);
+    }
+    .scope-admin { color: var(--accent); border-color: var(--accent); }
+    .scope-user { color: var(--text-muted); }
+    .scope-team { color: #2d8f4e; border-color: #2d8f4e; }
 
     .docs { display: flex; flex-direction: column; gap: var(--space-6); }
     .docs h3 {
@@ -258,12 +268,21 @@
           <div class="keys-list">
             <div class="row head">
               <div>Label</div>
+              <div>Scope</div>
               <div>Created</div>
               <div></div>
             </div>
             <% keys.forEach(function(k) { %>
               <div class="row">
-                <div class="label-cell"><%= k.label || '(unnamed)' %></div>
+                <div class="label-cell">
+                  <%= k.label || '(unnamed)' %>
+                  <% if (k.id === currentKeyId) { %>
+                    <span class="sub">(this session)</span>
+                  <% } %>
+                </div>
+                <div class="scope-cell">
+                  <span class="scope-badge scope-<%= k.scope || 'admin' %>"><%= k.scope || 'admin' %></span>
+                </div>
                 <div class="date"><%= new Date(k.created_at).toLocaleDateString() %></div>
                 <div><button class="btn btn-sm btn-danger" onclick="deleteKey('<%= k.id %>')">Delete</button></div>
               </div>
@@ -384,6 +403,12 @@ PASTE_API_KEY=ps_... node cli/paste.js upload index.html --ttl 7d</code></pre>
       <form onsubmit="event.preventDefault(); doCreateKey();">
         <label class="label" for="keyLabel">Label</label>
         <input id="keyLabel" class="input" type="text" placeholder="e.g. laptop, work" />
+        <label class="label" for="keyScope" style="margin-top:var(--space-3)">Scope</label>
+        <select id="keyScope" class="select">
+          <option value="admin">Admin — full access to all account pastes</option>
+          <option value="user" selected>User — only own pastes</option>
+          <option value="team">Team — public pastes only, no delete</option>
+        </select>
         <div class="modal-actions">
           <button type="button" class="btn" onclick="hideModal('keyModal')">Cancel</button>
           <button type="submit" class="btn btn-primary">Create</button>
@@ -403,6 +428,8 @@ PASTE_API_KEY=ps_... node cli/paste.js upload index.html --ttl 7d</code></pre>
       <textarea id="resultMnemonic" class="textarea" readonly rows="2" style="min-height:auto"></textarea>
       <label class="label" for="resultApiKey" style="margin-top:var(--space-3)">API Key</label>
       <input id="resultApiKey" class="input mono" readonly />
+      <label class="label" for="resultScope" style="margin-top:var(--space-3)">Scope</label>
+      <input id="resultScope" class="input mono" readonly />
       <div class="modal-actions">
         <button type="button" class="btn" onclick="hideModal('keyResultModal')">Close</button>
         <button type="button" class="btn btn-primary" onclick="copyCreds()">Copy All</button>
@@ -430,6 +457,7 @@ PASTE_API_KEY=ps_... node cli/paste.js upload index.html --ttl 7d</code></pre>
     }
     function showKeyModal() {
       document.getElementById('keyLabel').value = '';
+      document.getElementById('keyScope').value = 'user';
       document.getElementById('keyModal').classList.add('active');
       setTimeout(() => document.getElementById('keyLabel').focus(), 50);
     }
@@ -537,16 +565,18 @@ PASTE_API_KEY=ps_... node cli/paste.js upload index.html --ttl 7d</code></pre>
 
     async function doCreateKey() {
       const label = document.getElementById('keyLabel').value;
+      const scope = document.getElementById('keyScope').value;
       const res = await fetch('/api/keys', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ label })
+        body: JSON.stringify({ label, scope })
       });
       const data = await res.json();
       if (res.ok) {
         hideModal('keyModal');
         document.getElementById('resultMnemonic').value = data.mnemonic;
         document.getElementById('resultApiKey').value = data.apiKey;
+        document.getElementById('resultScope').value = data.scope || scope;
         document.getElementById('keyResultModal').classList.add('active');
       } else {
         showToast('Error: ' + (data.error || 'create failed'));
@@ -568,7 +598,8 @@ PASTE_API_KEY=ps_... node cli/paste.js upload index.html --ttl 7d</code></pre>
     function copyCreds() {
       const m = document.getElementById('resultMnemonic').value;
       const k = document.getElementById('resultApiKey').value;
-      navigator.clipboard.writeText('Mnemonic: ' + m + '\nAPI Key: ' + k);
+      const s = document.getElementById('resultScope').value;
+      navigator.clipboard.writeText('Mnemonic: ' + m + '\nAPI Key: ' + k + '\nScope: ' + s);
       showToast('Copied to clipboard');
     }
   </script>
