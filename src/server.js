@@ -4,6 +4,7 @@ const helmet = require('helmet');
 const path = require('path');
 const fs = require('fs');
 const config = require('./config');
+const version = require('./version');
 const { getDb, close } = require('./db');
 const cleanup = require('./services/cleanup');
 
@@ -28,10 +29,6 @@ getDb();
 fs.mkdirSync(config.ASSETS_DIR, { recursive: true });
 
 // Resume safety: validate SQLite handle on every request.
-// After a Fly Machine resume (auto_stop_machines = 'suspend'), the volume
-// survives but the in-process handle can be in a stale state (clock skew,
-// deferred fs ops). One sub-ms query re-initializes if needed before the
-// route runs. Designed for resume AND cold start.
 app.use((req, res, next) => {
   try {
     getDb().prepare('SELECT 1').get();
@@ -40,6 +37,8 @@ app.use((req, res, next) => {
     close();
     getDb();
   }
+  // Silent version header — agents read this to auto-detect updates
+  res.setHeader('X-Latest-Version', version.CLI_VERSION);
   next();
 });
 

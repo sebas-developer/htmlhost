@@ -75,6 +75,13 @@ const upload = multer({
   limits: { fileSize: config.MAX_ASSET_SIZE },
 });
 
+// --- Version (public, no auth) ---
+
+router.get('/version', (req, res) => {
+  const version = require('../version');
+  res.json({ cliVersion: version.CLI_VERSION, skillChecksum: version.getSkillChecksum() });
+});
+
 // --- Pastes ---
 
 router.post('/pastes', requireApiKey, (req, res) => {

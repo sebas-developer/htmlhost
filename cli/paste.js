@@ -6,6 +6,8 @@ const path = require('path');
 const crypto = require('crypto');
 const readline = require('readline');
 
+const CLI_VERSION = require('../package.json').version;
+
 // --- Password Hashing ---
 function hashPassword(password, salt) {
   const key = crypto.scryptSync(password, salt, 64);
@@ -113,6 +115,11 @@ function saveConfig(cfg) {
 const args = process.argv.slice(2);
 const command = args[0];
 
+if (command === '--version' || command === '-v') {
+  console.log(CLI_VERSION);
+  process.exit(0);
+}
+
 // Load config early so request() can use it
 const _config = loadConfig();
 
@@ -128,7 +135,7 @@ function request(method, urlPath, { body, headers = {} } = {}) {
       port: url.port,
       path: url.pathname + url.search,
       method,
-      headers: { ...headers, ...(API_KEY ? { Authorization: `Bearer ${API_KEY}` } : {}) },
+      headers: { ...headers, 'X-CLI-Version': CLI_VERSION, ...(API_KEY ? { Authorization: `Bearer ${API_KEY}` } : {}) },
     };
     if (body !== undefined) {
       if (typeof body === 'string') {

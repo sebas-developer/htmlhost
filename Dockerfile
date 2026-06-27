@@ -7,6 +7,8 @@ RUN npm ci --production
 
 COPY src/ src/
 COPY cli/ cli/
+COPY skills/paste-service.md skills/
+COPY package.json ./
 
 RUN mkdir -p /data
 
