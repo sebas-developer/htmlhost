@@ -64,7 +64,10 @@ router.get('/', (req, res) => {
       const accountIds = key.scope === 'admin'
         ? [key.account_id, ...keys.getVisiblePasteAccounts(key.account_id)]
         : [key.account_id];
-      const allPastes = pastes.listPastes(key.id, accountIds, key.scope);
+      const allPastes = pastes.listPastes(key.id, accountIds, key.scope).map(p => ({
+        ...p,
+        isPublic: !!p.is_public,
+      }));
       const allKeys = keys.listKeys(key.account_id);
       const cryptoParams = getBrowserDerivationParams();
       return res.render('dashboard', {
