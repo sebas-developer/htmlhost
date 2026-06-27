@@ -111,11 +111,20 @@ function getDb() {
     })();
   }
 
-  // Mark root if not already done (covers fresh DBs and single-key setups)
+  // Mark root if not already done. Handles: fresh DBs, single-key setups,
+  // and orphaned keys (parent was deleted before migration — ghost parent_account_id).
   if (!db.prepare("SELECT 1 FROM keys WHERE is_root = 1 LIMIT 1").get()) {
-    const root = db.prepare("SELECT id FROM keys WHERE parent_account_id IS NULL ORDER BY created_at ASC LIMIT 1").get();
+    // Oldest key that is parentless OR orphaned (parent doesn't exist)
+    const root = db.prepare(`
+      SELECT k.id, k.account_id FROM keys k
+      WHERE k.parent_account_id IS NULL
+         OR k.parent_account_id NOT IN (SELECT account_id FROM keys)
+      ORDER BY k.created_at ASC LIMIT 1
+    `).get();
     if (root) {
-      db.prepare("UPDATE keys SET is_root = 1 WHERE id = ?").run(root.id);
+      db.prepare("UPDATE keys SET is_root = 1, parent_account_id = NULL WHERE id = ?").run(root.id);
+      // Reparent other orphaned keys under the new root
+      db.prepare("UPDATE keys SET parent_account_id = ? WHERE (parent_account_id IS NULL OR parent_account_id NOT IN (SELECT account_id FROM keys)) AND id != ?").run(root.account_id, root.id);
     }
   }
 
