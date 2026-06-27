@@ -69,10 +69,17 @@ router.get('/', (req, res) => {
         isPublic: !!p.is_public,
       }));
       const allKeys = keys.listKeys(key.account_id);
+      const accountLabelMap = {};
+      allKeys.forEach(k => { accountLabelMap[k.account_id] = k.label || k.id.slice(0, 8); });
+      const keysData = allKeys.map(k => ({
+        ...k,
+        isRoot: !!k.is_root,
+        parentLabel: k.parent_account_id ? (accountLabelMap[k.parent_account_id] || 'orphaned') : null,
+      }));
       const cryptoParams = getBrowserDerivationParams();
       return res.render('dashboard', {
         pastes: allPastes,
-        keys: allKeys,
+        keys: keysData,
         keyLabel: key.label,
         currentKeyId: key.id,
         cryptoParams,

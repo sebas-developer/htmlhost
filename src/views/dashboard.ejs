@@ -118,6 +118,8 @@
     .scope-admin { color: var(--accent); border-color: var(--accent); }
     .scope-user { color: var(--text-muted); }
     .scope-team { color: #2d8f4e; border-color: #2d8f4e; }
+    .scope-root { color: #c09a1f; border-color: #c09a1f; }
+    .hierarchy-tag { color: var(--text-muted); font-size: 11px; font-weight: 400; }
 
     .docs { display: flex; flex-direction: column; gap: var(--space-6); }
     .docs h3 {
@@ -299,9 +301,15 @@
                   <% if (k.id === currentKeyId) { %>
                     <span class="sub">(this session)</span>
                   <% } %>
+                  <% if (k.parentLabel) { %>
+                    <span class="hierarchy-tag">&larr; <%= k.parentLabel %></span>
+                  <% } %>
                 </div>
                 <div class="scope-cell">
                   <span class="scope-badge scope-<%= k.scope || 'admin' %>"><%= k.scope || 'admin' %></span>
+                  <% if (k.isRoot) { %>
+                    <span class="scope-badge scope-root">root</span>
+                  <% } %>
                 </div>
                 <div class="date"><%= new Date(k.created_at).toLocaleDateString() %></div>
                 <div><button class="btn btn-sm btn-danger" onclick="deleteKey('<%= k.id %>')">Delete</button></div>
