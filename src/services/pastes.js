@@ -50,12 +50,12 @@ function getPaste(id) {
 function listPastes(keyId, accountId, scope) {
   const db = getDb();
   let rows;
-  if (scope === 'team') {
-    rows = db.prepare('SELECT id, created_at, expires_at, password_hash, is_public, LENGTH(html) as size FROM pastes WHERE is_public = 1 ORDER BY created_at DESC').all();
+  if (scope === 'team' || scope === 'admin') {
+    rows = db.prepare('SELECT id, created_at, expires_at, password_hash, is_public, LENGTH(html) as size FROM pastes WHERE account_id = ? OR is_public = 1 ORDER BY created_at DESC').all(accountId);
   } else if (scope === 'user') {
     rows = db.prepare('SELECT id, created_at, expires_at, password_hash, is_public, LENGTH(html) as size FROM pastes WHERE owner_key = ? ORDER BY created_at DESC').all(keyId);
   } else {
-    rows = db.prepare('SELECT id, created_at, expires_at, password_hash, is_public, LENGTH(html) as size FROM pastes WHERE account_id = ? OR is_public = 1 ORDER BY created_at DESC').all(accountId);
+    rows = [];
   }
 
   return rows.map(p => ({

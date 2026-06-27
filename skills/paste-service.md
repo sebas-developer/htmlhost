@@ -165,7 +165,7 @@ Every key has a **scope** that controls what it can see and do:
 |-------|------|------|--------|-------------|-------------------|
 | `admin` | All public + own account | Own account + any public | Own account + any public | Yes | Own account pastes |
 | `user` | Own pastes only | Own pastes only | Own pastes only | No | Own pastes only |
-| `team` | All **public** pastes | Own account pastes | Own account pastes | No | Own account pastes |
+| `team` | All public + own account | Own account only | Own account only | No | Own account pastes |
 
 - `setup()` creates an **admin** key (first key, full access).
 - `create-key` defaults to **user** scope. Pass `--scope team` for team members.
@@ -429,7 +429,7 @@ htmlhost show-credentials         # Show saved mnemonic + API key
 htmlhost upload <file> [--ttl]    # Upload HTML
 htmlhost replace <id> <file>      # Replace paste HTML with new file
 htmlhost pull <id> [--slug <name>] # Download paste HTML + assets into .htmlhost/<slug>/
-htmlhost list                     # List pastes (admin=all public + own account, user=own, team=public)
+htmlhost list                     # List pastes (admin/team=all public + own account, user=own)
 htmlhost info <id>                # Paste details (size, password, public status)
 htmlhost expire <id> --ttl <dur>  # Change paste duration
 htmlhost public <id>              # Make paste public (visible to all keys)
