@@ -109,6 +109,7 @@ router.get('/pastes', requireApiKey, (req, res) => {
     hasPassword: p.hasPassword,
     isPublic: !!p.is_public,
     size: p.size,
+    owner: p.owner_label || p.owner_key.slice(0, 8),
   })));
 });
 
@@ -116,6 +117,7 @@ router.get('/pastes/:id', requireApiKey, (req, res) => {
   const paste = pastes.getPaste(req.params.id);
   if (!paste) return res.status(404).json({ error: 'Not found' });
   if (!canEdit(paste, req)) return res.status(403).json({ error: 'Forbidden' });
+  const ownerKey = keys.findById(paste.owner_key);
   res.json({
     id: paste.id,
     html: paste.html,
@@ -125,6 +127,7 @@ router.get('/pastes/:id', requireApiKey, (req, res) => {
     hasPassword: paste.password_hash !== null,
     isPublic: !!paste.is_public,
     size: Buffer.byteLength(paste.html, 'utf8'),
+    owner: ownerKey ? (ownerKey.label || paste.owner_key.slice(0, 8)) : paste.owner_key.slice(0, 8),
   });
 });
 

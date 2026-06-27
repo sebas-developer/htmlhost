@@ -260,6 +260,9 @@
                       <span class="dot"></span>
                       <%= p.ttl %><% if (p.expired) { %> &middot; expired<% } %>
                     </span>
+                    <% if (p.owner_label) { %>
+                      <span class="hierarchy-tag">by <%= p.owner_label %></span>
+                    <% } %>
                   </div>
                   <div class="paste-actions">
                     <button class="btn btn-sm" onclick="copyUrl('<%= p.id %>')">Copy URL</button>

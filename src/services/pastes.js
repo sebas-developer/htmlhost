@@ -55,10 +55,11 @@ function listPastes(keyId, accountIds, scope) {
   const db = getDb();
   let rows;
   const ph = inClause(accountIds);
+  const cols = 'p.id, p.created_at, p.expires_at, p.password_hash, p.is_public, LENGTH(p.html) as size, p.owner_key, k.label as owner_label';
   if (scope === 'user') {
-    rows = db.prepare(`SELECT id, created_at, expires_at, password_hash, is_public, LENGTH(html) as size FROM pastes WHERE owner_key = ? ORDER BY created_at DESC`).all(keyId);
+    rows = db.prepare(`SELECT ${cols} FROM pastes p LEFT JOIN keys k ON p.owner_key = k.id WHERE p.owner_key = ? ORDER BY p.created_at DESC`).all(keyId);
   } else {
-    rows = db.prepare(`SELECT id, created_at, expires_at, password_hash, is_public, LENGTH(html) as size FROM pastes WHERE account_id IN (${ph}) OR is_public = 1 ORDER BY created_at DESC`).all(...accountIds);
+    rows = db.prepare(`SELECT ${cols} FROM pastes p LEFT JOIN keys k ON p.owner_key = k.id WHERE p.account_id IN (${ph}) OR p.is_public = 1 ORDER BY p.created_at DESC`).all(...accountIds);
   }
 
   return rows.map(p => ({

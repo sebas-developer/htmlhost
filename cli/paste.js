@@ -176,8 +176,8 @@ Commands:
   replace <id> <file>      Replace paste HTML with new file
   pull <id> [opts]         Download paste HTML + assets into .htmlhost/<slug>/
     --slug <name>          Project folder name (default: paste ID)
-  list                     List pastes (based on key scope)
-  info <id>                Get paste details
+  list                     List pastes (shows owner, scope-aware)
+  info <id>                Get paste details (includes owner)
   expire <id> --ttl <dur>  Change paste duration
   public <id>              Make paste public (visible to all keys)
   private <id>             Make paste private (default — only your account)
@@ -188,10 +188,10 @@ Commands:
     --path <path>          Relative path in paste (e.g., images/photo.png)
   assets <id>              List assets for a paste
   delete-asset <id> <path> Delete an asset from a paste
-  keys                     List API keys in your account
-  create-key [label] [opts]  Create new API key (inherits your account)
+  keys                     List API keys (shows scope, root, hierarchy)
+  create-key [label] [opts]  Create new API key (own account, child of yours)
     --scope <scope>        admin, user, team (default: user)
-  delete-key <id>          Delete an API key
+  delete-key <id>          Delete an API key (root can delete children)
   update                   Pull latest version and reinstall
 
 Config: ~/.htmlhost/config.json
@@ -437,11 +437,12 @@ async function main() {
         else {
           console.log(`\n  ${res.data.length} paste(s):\n`);
           res.data.forEach(p => {
-            const exp = p.expired ? ' EXPIRED' : p.ttl === 'never' ? 'never' : p.ttl;
-            const lock = p.hasPassword ? ' 🔒' : '';
-            const pub = p.isPublic ? ' 🌐' : '';
+            const exp = p.expired ? 'EXPIRED' : p.ttl === 'never' ? 'never' : p.ttl;
+            const lock = p.hasPassword ? '🔒' : '  ';
+            const pub = p.isPublic ? '🌐' : '  ';
             const size = formatSize(p.size);
-            console.log(`    ${p.id}  ${size.padEnd(8)} ${exp.padEnd(9)}${lock}${pub}  ${BASE_URL}${p.url}`);
+            const owner = p.owner ? p.owner.slice(0, 12).padEnd(12) : ''.padEnd(12);
+            console.log(`    ${p.id}  ${owner} ${size.padEnd(8)} ${exp.padEnd(9)} ${lock} ${pub}  ${BASE_URL}${p.url}`);
           });
           console.log('');
         }
@@ -496,13 +497,13 @@ async function main() {
           const exp = d.expiresAt || 'never';
           const remaining = d.expiresAt ? ` (${d.ttl} remaining)` : '';
           console.log(`\n  ID:       ${d.id}`);
+          console.log(`  Owner:    ${d.owner || 'unknown'}`);
           console.log(`  Created:  ${d.createdAt}`);
           console.log(`  Expires:  ${exp}${remaining}`);
           console.log(`  Size:     ${formatSize(d.size)}`);
           console.log(`  Password: ${d.hasPassword ? 'protected' : 'none'}`);
           console.log(`  Public:   ${d.isPublic ? 'yes 🌐' : 'no'}`);
-          console.log(`  URL:      ${BASE_URL}/p/${d.id}\n`);
-        } else { console.error('Error:', res.data.error); }
+          console.log(`  URL:      ${BASE_URL}/p/${d.id}\n`);        } else { console.error('Error:', res.data.error); }
         break;
       }
       case 'pull': {
@@ -569,7 +570,12 @@ async function main() {
         if (res.data.length === 0) { console.log('\n  No keys.\n'); }
         else {
           console.log(`\n  ${res.data.length} key(s):\n`);
-          res.data.forEach(k => console.log(`    ${k.id}  ${(k.scope||'admin').padEnd(6)}  ${k.label || '(unnamed)'}  ${k.createdAt}`));
+          res.data.forEach(k => {
+            const scope = (k.scope || 'admin').padEnd(6);
+            const root = k.isRoot ? 'ROOT' : '    ';
+            const label = (k.label || '(unnamed)').slice(0, 20);
+            console.log(`    ${k.id}  ${scope} ${root}  ${label}  ${k.createdAt}`);
+          });
           console.log('');
         }
         break;
