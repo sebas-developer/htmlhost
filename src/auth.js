@@ -6,6 +6,15 @@ function _setKeyContext(req, key) {
   req.keyLabel = key.label;
   req.accountId = key.account_id || key.id;
   req.keyScope = key.scope || 'admin';
+  req.isRoot = !!key.is_root;
+
+  // Compute visible account_ids for paste operations.
+  // admin: own + non-admin descendants. team/user: own only.
+  if (req.keyScope === 'admin') {
+    req.accountIds = [req.accountId, ...keys.getVisiblePasteAccounts(req.accountId)];
+  } else {
+    req.accountIds = [req.accountId];
+  }
 }
 
 // Accepts either a session (webapp) or Bearer API key (CLI / external).

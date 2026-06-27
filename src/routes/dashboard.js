@@ -61,7 +61,10 @@ router.get('/', (req, res) => {
   if (req.session && req.session.keyId) {
     const key = keys.findById(req.session.keyId);
     if (key) {
-      const allPastes = pastes.listPastes(key.id, key.account_id, key.scope);
+      const accountIds = key.scope === 'admin'
+        ? [key.account_id, ...keys.getVisiblePasteAccounts(key.account_id)]
+        : [key.account_id];
+      const allPastes = pastes.listPastes(key.id, accountIds, key.scope);
       const allKeys = keys.listKeys(key.account_id);
       const cryptoParams = getBrowserDerivationParams();
       return res.render('dashboard', {

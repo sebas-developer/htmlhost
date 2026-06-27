@@ -159,36 +159,39 @@ mnemonic** — it's the only way to recover the account. Lose it = lose access.
 
 ## Key Scopes & Permissions
 
-Every key has a **scope** that controls what it can see and do:
+Every key has a **scope** and its **own independent account**. Keys form a hierarchy: `create-key` makes a child account linked to the creator.
 
 | Scope | List | Edit | Delete | Create Keys | Visibility Toggle |
 |-------|------|------|--------|-------------|-------------------|
-| `admin` | All public + own account | Own account + any public | Own account + any public | Yes | Own account pastes |
+| `admin` | Own + descendants + all public | Own + descendants + any public | Own + descendants + any public | Yes | Own + descendants |
 | `user` | Own pastes only | Own pastes only | Own pastes only | No | Own pastes only |
-| `team` | All public + own account | Own account only | Own account only | No | Own account pastes |
+| `team` | Own + all public | Own account only | Own account only | No | Own account |
 
-- `setup()` creates an **admin** key (first key, full access).
-- `create-key` defaults to **user** scope. Pass `--scope team` for team members.
-- Only **admin** keys can create or delete other keys.
+**Hierarchy rules:**
+- `setup()` creates the **root admin** (cannot be deleted).
+- `create-key` creates a child account with its own `account_id`. Parent sees own + non-admin descendants.
+- **Admins are equal rank**: root cannot see child admin's private pastes, and vice versa. Root can delete child admin; child admin cannot delete root.
+- Admin visibility **stops at admin boundary**: root sees own team/user children, NOT team/user under a child admin.
+- Cannot delete a key that has child keys (remove children first).
 
 ```bash
-htmlhost create-key temp-dev --scope user     # sees only own pastes
-htmlhost create-key collaborator --scope team  # sees public pastes only
-htmlhost create-key backup-admin --scope admin # full access
+htmlhost create-key temp-dev --scope user     # independent account, sees only own
+htmlhost create-key collaborator --scope team  # independent account, sees own + public
+htmlhost create-key backup-admin --scope admin # equal rank, own private pastes
 ```
 
 ## Public vs Private Pastes
 
-Pastes are **private by default** — only keys in the same account can see them (via API).
+Pastes are **private by default** — only the owner account and its parent admin can see them (via API).
 
-Make a paste **public** to let any authenticated key (including team-scope) fetch and edit it:
+Make a paste **public** to let any key see it:
 
 ```bash
-htmlhost public <id>     # visible + editable by all keys
+htmlhost public <id>     # visible to all keys via API
 htmlhost private <id>    # back to account-only (default)
 ```
 
-The rendered page at `/p/<id>` is always accessible via URL (like a secret link). "Public" means it appears in all scope lists and admin/team keys can see it via API. Admin can edit or delete any public paste (even from other accounts); team can only edit/delete pastes within their own account. Only the owner or account admin can change visibility.
+The rendered page at `/p/<id>` is always accessible via URL (like a secret link). "Public" means it appears in all scope lists. Admin can edit or delete any public paste; team can only edit/delete pastes within their own account. Only the owner or parent admin can change visibility.
 
 ## Credential Management
 

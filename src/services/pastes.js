@@ -9,6 +9,11 @@ function hashPastePassword(password, salt) {
   return crypto.scryptSync(password, salt, 64).toString('hex');
 }
 
+function inClause(arr) {
+  if (!arr.length) return null;
+  return arr.map(() => '?').join(',');
+}
+
 function createPaste({ html, ttl, ownerKeyId, accountId }) {
   if (!html || typeof html !== 'string') throw new Error('HTML content required');
   if (Buffer.byteLength(html, 'utf8') > config.MAX_PASTE_SIZE) {
@@ -20,7 +25,7 @@ function createPaste({ html, ttl, ownerKeyId, accountId }) {
   let attempts = 0;
   do {
     id = generateId();
-    const exists = db.prepare('SELECT 1 FROM pastes WHERE id = ?').get(id);
+    const exists = db.prepare('SELECT id FROM pastes WHERE id = ?').get(id);
     if (!exists) break;
     attempts++;
   } while (attempts < 50);
@@ -39,7 +44,6 @@ function getPaste(id) {
   const paste = db.prepare('SELECT * FROM pastes WHERE id = ?').get(id);
   if (!paste) return null;
 
-  // Don't delete expired pastes here — let cleanup handle it
   if (paste.expires_at && paste.expires_at < Date.now()) {
     return null;
   }
@@ -47,15 +51,14 @@ function getPaste(id) {
   return paste;
 }
 
-function listPastes(keyId, accountId, scope) {
+function listPastes(keyId, accountIds, scope) {
   const db = getDb();
   let rows;
-  if (scope === 'team' || scope === 'admin') {
-    rows = db.prepare('SELECT id, created_at, expires_at, password_hash, is_public, LENGTH(html) as size FROM pastes WHERE account_id = ? OR is_public = 1 ORDER BY created_at DESC').all(accountId);
-  } else if (scope === 'user') {
-    rows = db.prepare('SELECT id, created_at, expires_at, password_hash, is_public, LENGTH(html) as size FROM pastes WHERE owner_key = ? ORDER BY created_at DESC').all(keyId);
+  const ph = inClause(accountIds);
+  if (scope === 'user') {
+    rows = db.prepare(`SELECT id, created_at, expires_at, password_hash, is_public, LENGTH(html) as size FROM pastes WHERE owner_key = ? ORDER BY created_at DESC`).all(keyId);
   } else {
-    rows = [];
+    rows = db.prepare(`SELECT id, created_at, expires_at, password_hash, is_public, LENGTH(html) as size FROM pastes WHERE account_id IN (${ph}) OR is_public = 1 ORDER BY created_at DESC`).all(...accountIds);
   }
 
   return rows.map(p => ({
@@ -67,10 +70,12 @@ function listPastes(keyId, accountId, scope) {
   }));
 }
 
-function deletePaste(id, accountId) {
+function deletePaste(id, accountIds) {
+  if (!accountIds.length) return false;
   const db = getDb();
   assets.deletePasteAssets(id);
-  const result = db.prepare('DELETE FROM pastes WHERE id = ? AND (account_id = ? OR is_public = 1)').run(id, accountId);
+  const ph = inClause(accountIds);
+  const result = db.prepare(`DELETE FROM pastes WHERE id = ? AND (account_id IN (${ph}) OR is_public = 1)`).run(id, ...accountIds);
   return result.changes > 0;
 }
 
@@ -80,43 +85,53 @@ function deleteExpired() {
   return result.changes;
 }
 
-function getPasteCount(accountId) {
+function getPasteCount(accountIds) {
+  if (!accountIds.length) return 0;
   const db = getDb();
-  return db.prepare('SELECT COUNT(*) as count FROM pastes WHERE account_id = ?').get(accountId).count;
+  const ph = inClause(accountIds);
+  return db.prepare(`SELECT COUNT(*) as count FROM pastes WHERE account_id IN (${ph})`).get(...accountIds).count;
 }
 
-function updatePasteTTL(id, accountId, keyId, ttl) {
+function updatePasteTTL(id, accountIds, keyId, ttl) {
+  if (!accountIds.length) return null;
   const db = getDb();
-  const paste = db.prepare('SELECT id FROM pastes WHERE id = ? AND (account_id = ? OR is_public = 1)').get(id, accountId);
+  const ph = inClause(accountIds);
+  const paste = db.prepare(`SELECT id FROM pastes WHERE id = ? AND (account_id IN (${ph}) OR is_public = 1)`).get(id, ...accountIds);
   if (!paste) return null;
   const newExpires = expiresAt(ttl);
   db.prepare('UPDATE pastes SET expires_at = ?, last_modified_by = ? WHERE id = ?').run(newExpires, keyId, id);
   return { id, expiresAt: newExpires, ttl: formatExpiry(newExpires) };
 }
 
-function updatePasteHTML(id, accountId, keyId, html) {
+function updatePasteHTML(id, accountIds, keyId, html) {
+  if (!accountIds.length) return null;
   if (!html || typeof html !== 'string') throw new Error('HTML content required');
   if (Buffer.byteLength(html, 'utf8') > config.MAX_PASTE_SIZE) {
     throw new Error(`Paste exceeds ${config.MAX_PASTE_SIZE / 1024 / 1024}MB limit`);
   }
   const db = getDb();
-  const paste = db.prepare('SELECT id FROM pastes WHERE id = ? AND (account_id = ? OR is_public = 1)').get(id, accountId);
+  const ph = inClause(accountIds);
+  const paste = db.prepare(`SELECT id FROM pastes WHERE id = ? AND (account_id IN (${ph}) OR is_public = 1)`).get(id, ...accountIds);
   if (!paste) return null;
   db.prepare('UPDATE pastes SET html = ?, last_modified_by = ? WHERE id = ?').run(html, keyId, id);
   return { id, size: Buffer.byteLength(html, 'utf8') };
 }
 
-function setPasteVisibility(id, accountId, isPublic) {
+function setPasteVisibility(id, accountIds, isPublic) {
+  if (!accountIds.length) return null;
   const db = getDb();
-  const paste = db.prepare('SELECT id FROM pastes WHERE id = ? AND account_id = ?').get(id, accountId);
+  const ph = inClause(accountIds);
+  const paste = db.prepare(`SELECT id FROM pastes WHERE id = ? AND account_id IN (${ph})`).get(id, ...accountIds);
   if (!paste) return null;
   db.prepare('UPDATE pastes SET is_public = ? WHERE id = ?').run(isPublic ? 1 : 0, id);
   return { id, isPublic: !!isPublic };
 }
 
-function setPastePassword(id, accountId, password) {
+function setPastePassword(id, accountIds, password) {
+  if (!accountIds.length) return false;
   const db = getDb();
-  const paste = db.prepare('SELECT id FROM pastes WHERE id = ? AND (account_id = ? OR is_public = 1)').get(id, accountId);
+  const ph = inClause(accountIds);
+  const paste = db.prepare(`SELECT id FROM pastes WHERE id = ? AND (account_id IN (${ph}) OR is_public = 1)`).get(id, ...accountIds);
   if (!paste) return null;
   const salt = crypto.randomBytes(16).toString('hex');
   const hash = hashPastePassword(password, salt);
@@ -124,9 +139,11 @@ function setPastePassword(id, accountId, password) {
   return true;
 }
 
-function removePastePassword(id, accountId) {
+function removePastePassword(id, accountIds) {
+  if (!accountIds.length) return false;
   const db = getDb();
-  const result = db.prepare('UPDATE pastes SET password_hash = NULL, password_salt = NULL WHERE id = ? AND (account_id = ? OR is_public = 1)').run(id, accountId);
+  const ph = inClause(accountIds);
+  const result = db.prepare(`UPDATE pastes SET password_hash = NULL, password_salt = NULL WHERE id = ? AND (account_id IN (${ph}) OR is_public = 1)`).run(id, ...accountIds);
   return result.changes > 0;
 }
 

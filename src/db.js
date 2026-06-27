@@ -86,10 +86,44 @@ function getDb() {
     db.prepare("UPDATE pastes SET account_id = owner_key WHERE account_id = ''").run();
   })();
 
+  // Migrate: add parent_account_id + is_root to keys (hierarchical accounts)
+  if (!keyCols.includes('parent_account_id')) {
+    db.exec("ALTER TABLE keys ADD COLUMN parent_account_id TEXT");
+  }
+  if (!keyCols.includes('is_root')) {
+    db.exec("ALTER TABLE keys ADD COLUMN is_root INTEGER NOT NULL DEFAULT 0");
+  }
+
+  // Backfill: separate child keys into own accounts with parent linkage.
+  // Idempotent: guarded by account_id <> id check.
+  const needsHierarchyMigrate = db.prepare("SELECT 1 FROM keys WHERE account_id <> id AND parent_account_id IS NULL LIMIT 1").get();
+  if (needsHierarchyMigrate) {
+    db.transaction(() => {
+      // Single statement: RHS evaluates against original row (atomic, order-safe)
+      db.prepare("UPDATE keys SET parent_account_id = account_id, account_id = id WHERE account_id <> id AND parent_account_id IS NULL").run();
+      // Repoint pastes to owner's new account_id (COALESCE guards orphan pastes)
+      db.prepare("UPDATE pastes SET account_id = COALESCE((SELECT account_id FROM keys WHERE id = pastes.owner_key), account_id)").run();
+      // Mark root: first key with no parent
+      const root = db.prepare("SELECT id FROM keys WHERE parent_account_id IS NULL ORDER BY created_at ASC LIMIT 1").get();
+      if (root) {
+        db.prepare("UPDATE keys SET is_root = 1 WHERE id = ?").run(root.id);
+      }
+    })();
+  }
+
+  // Mark root if not already done (covers fresh DBs and single-key setups)
+  if (!db.prepare("SELECT 1 FROM keys WHERE is_root = 1 LIMIT 1").get()) {
+    const root = db.prepare("SELECT id FROM keys WHERE parent_account_id IS NULL ORDER BY created_at ASC LIMIT 1").get();
+    if (root) {
+      db.prepare("UPDATE keys SET is_root = 1 WHERE id = ?").run(root.id);
+    }
+  }
+
   // Indexes for the new query patterns
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_pastes_account ON pastes(account_id);
     CREATE INDEX IF NOT EXISTS idx_keys_account ON keys(account_id);
+    CREATE INDEX IF NOT EXISTS idx_keys_parent ON keys(parent_account_id);
     CREATE INDEX IF NOT EXISTS idx_pastes_public ON pastes(id) WHERE is_public = 1;
   `);
 
