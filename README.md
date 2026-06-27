@@ -32,7 +32,7 @@ See [Self-host on Fly.io](#self-host-on-flyio) below.
 - **Ephemeral by default.** TTL from `1h` to `indefinite`. Demos, previews, and throwaways self-destruct — no cleanup duty.
 - **Assets, not just HTML.** Drop images, audio, fonts, video, CSS, JS, PDFs under a paste and reference them by absolute URL. A full static site, not a single file.
 - **Mnemonic auth, no passwords.** One 12-word phrase derives the API key. Nothing to paste into a browser, nothing to leak in a screenshot.
-- **Multi-key accounts.** One `setup()` creates an admin key. Create scoped sub-keys (`--scope user`, `--scope team`) that share the account. Admin sees all, user sees own, team sees public.
+- **Multi-key accounts.** One `setup()` creates an admin key. Create scoped sub-keys (`--scope user`, `--scope team`) that share the account. Admin sees all public + own account, user sees own, team sees public. Admin can edit/delete any public paste.
 - **Public & private.** Pastes are private by default. `htmlhost public <id>` makes them visible and editable by any key (team collaboration). Pull source code back with `htmlhost pull <id>`.
 - **Agent-native skill.** A single `SKILL.md` teaches OpenCode, Claude Code, and Codex the full lifecycle — install, auth, upload, asset handling, pull, the relative-path trap — so the agent does the right thing on the first try.
 - **Self-hostable.** Single binary-ish Node service, SQLite on a volume, deploys to fly.io or Docker in minutes. Your data, your rules, your domain.

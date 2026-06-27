@@ -163,9 +163,9 @@ Every key has a **scope** that controls what it can see and do:
 
 | Scope | List | Edit | Delete | Create Keys | Visibility Toggle |
 |-------|------|------|--------|-------------|-------------------|
-| `admin` | All account pastes | Any account paste | Any account paste | Yes | Own/account pastes |
+| `admin` | All public + own account | Own account + any public | Own account + any public | Yes | Own account pastes |
 | `user` | Own pastes only | Own pastes only | Own pastes only | No | Own pastes only |
-| `team` | All **public** pastes | Public pastes | **Never** | No | **Never** |
+| `team` | All **public** pastes | Own account pastes | Own account pastes | No | Own account pastes |
 
 - `setup()` creates an **admin** key (first key, full access).
 - `create-key` defaults to **user** scope. Pass `--scope team` for team members.
@@ -188,7 +188,7 @@ htmlhost public <id>     # visible + editable by all keys
 htmlhost private <id>    # back to account-only (default)
 ```
 
-The rendered page at `/p/<id>` is always accessible via URL (like a secret link). "Public" means it appears in team-scope lists and any key can edit it via API. Only the owner or admin can change visibility or delete.
+The rendered page at `/p/<id>` is always accessible via URL (like a secret link). "Public" means it appears in all scope lists and admin/team keys can see it via API. Admin can edit or delete any public paste (even from other accounts); team can only edit/delete pastes within their own account. Only the owner or account admin can change visibility.
 
 ## Credential Management
 
@@ -429,7 +429,7 @@ htmlhost show-credentials         # Show saved mnemonic + API key
 htmlhost upload <file> [--ttl]    # Upload HTML
 htmlhost replace <id> <file>      # Replace paste HTML with new file
 htmlhost pull <id> [--slug <name>] # Download paste HTML + assets into .htmlhost/<slug>/
-htmlhost list                     # List pastes (scope-based: admin=all, user=own, team=public)
+htmlhost list                     # List pastes (admin=all public + own account, user=own, team=public)
 htmlhost info <id>                # Paste details (size, password, public status)
 htmlhost expire <id> --ttl <dur>  # Change paste duration
 htmlhost public <id>              # Make paste public (visible to all keys)

@@ -14,22 +14,24 @@ const config = require('../config');
 const { formatExpiry } = require('../util/ttl');
 
 // Permission gates: scope-aware
-// admin: full account access | user: own pastes only | team: public pastes only (read+edit, no delete)
+// admin: own account + all public (edit/delete) | user: own pastes | team: own account + view all public
 const canEdit = (paste, req) => {
-  if (req.keyScope === 'admin') return paste.account_id === req.accountId;
+  if (req.keyScope === 'admin') return paste.account_id === req.accountId || !!paste.is_public;
   if (req.keyScope === 'user') return paste.owner_key === req.keyId;
-  if (req.keyScope === 'team') return !!paste.is_public;
+  if (req.keyScope === 'team') return paste.account_id === req.accountId;
   return false;
 };
 const canDelete = (paste, req) => {
-  if (req.keyScope === 'admin') return paste.account_id === req.accountId;
+  if (req.keyScope === 'admin') return paste.account_id === req.accountId || !!paste.is_public;
   if (req.keyScope === 'user') return paste.owner_key === req.keyId;
-  return false; // team scope cannot delete
+  if (req.keyScope === 'team') return paste.account_id === req.accountId;
+  return false;
 };
 const canManage = (paste, req) => {
   if (req.keyScope === 'admin') return paste.account_id === req.accountId;
   if (req.keyScope === 'user') return paste.owner_key === req.keyId;
-  return false; // visibility toggle = owner only
+  if (req.keyScope === 'team') return paste.account_id === req.accountId;
+  return false;
 };
 
 const registerLimiter = rateLimit({
@@ -261,6 +263,9 @@ router.get('/pastes/:id/assets', requireApiKey, (req, res) => {
 });
 
 router.delete('/pastes/:id/assets/:filename(*)', requireApiKey, (req, res) => {
+  const paste = pastes.getPaste(req.params.id);
+  if (!paste) return res.status(404).json({ error: 'Not found' });
+  if (!canDelete(paste, req)) return res.status(403).json({ error: 'Forbidden' });
   const deleted = assets.deleteAsset(req.params.id, req.params.filename, req.accountId);
   if (!deleted) return res.status(404).json({ error: 'Not found' });
   res.json({ deleted: true });

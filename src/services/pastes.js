@@ -55,7 +55,7 @@ function listPastes(keyId, accountId, scope) {
   } else if (scope === 'user') {
     rows = db.prepare('SELECT id, created_at, expires_at, password_hash, is_public, LENGTH(html) as size FROM pastes WHERE owner_key = ? ORDER BY created_at DESC').all(keyId);
   } else {
-    rows = db.prepare('SELECT id, created_at, expires_at, password_hash, is_public, LENGTH(html) as size FROM pastes WHERE account_id = ? ORDER BY created_at DESC').all(accountId);
+    rows = db.prepare('SELECT id, created_at, expires_at, password_hash, is_public, LENGTH(html) as size FROM pastes WHERE account_id = ? OR is_public = 1 ORDER BY created_at DESC').all(accountId);
   }
 
   return rows.map(p => ({
@@ -70,7 +70,7 @@ function listPastes(keyId, accountId, scope) {
 function deletePaste(id, accountId) {
   const db = getDb();
   assets.deletePasteAssets(id);
-  const result = db.prepare('DELETE FROM pastes WHERE id = ? AND account_id = ?').run(id, accountId);
+  const result = db.prepare('DELETE FROM pastes WHERE id = ? AND (account_id = ? OR is_public = 1)').run(id, accountId);
   return result.changes > 0;
 }
 
