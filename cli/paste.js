@@ -126,6 +126,8 @@ const _config = loadConfig();
 let BASE_URL = process.env.PASTE_URL || _config.url || 'https://html-host.fly.dev';
 let API_KEY = process.env.PASTE_API_KEY || _config.apiKey;
 
+let _versionChecked = false;
+
 function request(method, urlPath, { body, headers = {} } = {}) {
   return new Promise((resolve, reject) => {
     const url = new URL(urlPath, BASE_URL);
@@ -151,6 +153,13 @@ function request(method, urlPath, { body, headers = {} } = {}) {
       let data = '';
       res.on('data', (c) => data += c);
       res.on('end', () => {
+        if (!_versionChecked) {
+          _versionChecked = true;
+          const latest = res.headers['x-latest-version'];
+          if (latest && latest !== CLI_VERSION) {
+            console.error(`\n  Update available: htmlhost v${latest} (you have v${CLI_VERSION}). Run: htmlhost update\n`);
+          }
+        }
         try { resolve({ status: res.statusCode, data: JSON.parse(data) }); }
         catch { resolve({ status: res.statusCode, data }); }
       });
